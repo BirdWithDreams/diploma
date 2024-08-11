@@ -9,8 +9,8 @@ from datasets import load_dataset
 model_name = "openai/whisper-medium"
 
 
-# processor = WhisperProcessor.from_pretrained(model_name)
-# model = WhisperForConditionalGeneration.from_pretrained(model_name)
+processor = WhisperProcessor.from_pretrained(model_name)
+model = WhisperForConditionalGeneration.from_pretrained(model_name)
 
 
 # Function to process an audio file and return transcription
