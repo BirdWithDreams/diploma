@@ -1,13 +1,13 @@
 import pandas as pd
 
-with open('../my_tests/prompts', 'r') as f:
+with open('../data/my_tests/prompts', 'r') as f:
     prompts = f.readlines()
 
 prompts = list(map(lambda x: x.split(' ', maxsplit=1), prompts))
 prompts = pd.DataFrame(prompts, columns=['number', 'prompt'])
 prompts.set_index('number', inplace=True)
 
-with open('../my_tests/whisper_output.txt', 'r') as f:
+with open('../data/my_tests/whisper_output.txt', 'r') as f:
     whisper_outputs = f.readlines()
 
 whisper_outputs = list(map(lambda x: x.split(' ', maxsplit=1), whisper_outputs))

@@ -17,7 +17,7 @@ tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 # Text to speech list of amplitude values as output
 # wav = tts.tts(text="Hello world!", speaker_wav="sample.m4a", language="en")
 # Text to speech to a file
-with open('../my_tests/prompts', 'r') as f:
+with open('../data/my_tests/prompts', 'r') as f:
     prompts = f.readlines()
 
 for prompt in tqdm(prompts[50:]):

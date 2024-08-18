@@ -291,7 +291,7 @@ if __name__ == "__main__":
                 os.system(f"cp {config_path} {exp_path}")
                 os.system(f"cp {vocab_file} {exp_path}")
 
-                ft_xtts_checkpoint = os.path.join(exp_path, "best_model.pth")
+                ft_xtts_checkpoint = os.path.join(exp_path, "model.pth")
                 print("Model training done!")
                 clear_gpu_cache()
                 return "Model training done!", config_path, vocab_file, ft_xtts_checkpoint, speaker_wav

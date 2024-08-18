@@ -328,7 +328,7 @@ CONFIG_PATH = "recipes/ljspeech/xtts_v1/run/training/GPT_XTTS_LJSpeech_FT-Octobe
 # Add here the vocab file that you have used to train the model
 TOKENIZER_PATH = "recipes/ljspeech/xtts_v1/run/training/XTTS_v2_original_model_files/vocab.json"
 # Add here the checkpoint that you want to do inference with
-XTTS_CHECKPOINT = "recipes/ljspeech/xtts_v1/run/training/GPT_XTTS_LJSpeech_FT/best_model.pth"
+XTTS_CHECKPOINT = "recipes/ljspeech/xtts_v1/run/training/GPT_XTTS_LJSpeech_FT/model.pth"
 # Add here the speaker reference
 SPEAKER_REFERENCE = "LjSpeech_reference.wav"
 
