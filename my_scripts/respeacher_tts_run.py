@@ -15,7 +15,11 @@ from TTS.api import TTS
 @click.option('--output-folder', default='../data/my_tests/audio/respeacher_tts', help='Name of output folder')
 def generate_tts(prompt_csv, sample_size, speakers_dir, output_folder):
     prompts = pd.read_csv(prompt_csv, index_col=0)
-    model = TTS(model_path='../checkpoints/respeacher/', config_path='../checkpoints/respeacher/config.json').to('cuda')
+    model = TTS(
+        model_name='xtts_v2',
+        model_path='../checkpoints/good_dataset/',
+        config_path='../checkpoints/good_dataset/config.json',
+    ).to('cuda')
 
     speakers_path = Path(speakers_dir)
     speakers = list(speakers_path.glob('*.wav'))

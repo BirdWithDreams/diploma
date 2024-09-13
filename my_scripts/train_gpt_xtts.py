@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from trainer import Trainer, TrainerArgs
 
@@ -35,8 +36,8 @@ OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "trai
 # Training Parameters
 OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
 START_WITH_EVAL = True  # if True it will star with evaluation
-BATCH_SIZE = 3  # set here the batch size
-GRAD_ACUMM_STEPS = 84  # set here the grad accumulation steps
+BATCH_SIZE = 4  # set here the batch size
+GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Note: we recommend that BATCH_SIZE * GRAD_ACUMM_STEPS need to be at least 252 for more efficient training. You can increase/decrease BATCH_SIZE but then set GRAD_ACUMM_STEPS accordingly.
 
 # Define here the dataset that you want to use for the fine-tuning on.
@@ -85,9 +86,8 @@ if not os.path.isfile(TOKENIZER_FILE) or not os.path.isfile(XTTS_CHECKPOINT):
     )
 
 # Training sentences generations
-SPEAKER_REFERENCE = [
-    "../data/speakers/constance-035.wav"  # Updated speaker reference path
-]
+SPEAKER_REFERENCE = ["../data/speakers/LJ001-0001.wav"]
+# SPEAKER_REFERENCE = list(Path('../data/speakers/').glob('*.wav'))
 LANGUAGE = config_dataset.language
 
 
