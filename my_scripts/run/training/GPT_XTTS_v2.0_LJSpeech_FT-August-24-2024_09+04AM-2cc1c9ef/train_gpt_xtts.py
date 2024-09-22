@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import pandas as pd
 from trainer import Trainer, TrainerArgs
 
 from TTS.config.shared_configs import BaseDatasetConfig
@@ -13,25 +12,20 @@ from TTS.utils.manage import ModelManager
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
     """Normalizes the LJSpeech meta data file to TTS format
     https://keithito.com/LJ-Speech-Dataset/"""
-    meta_file_path = os.path.join(root_path, meta_file)
-    meta_df = pd.read_csv(meta_file_path)
+    txt_file = os.path.join(root_path, meta_file)
     items = []
-    for _, row in meta_df.iterrows():
-        text = row['raw_text']
-        if not isinstance(text, str):
-            continue
-
-        if len(text.strip()) == 0:
-            continue
-
-        wav_file = os.path.join(root_path, "wavs", row['audio_id'] + '.wav')
-        speaker_name = row['speaker_id'] + '_voxpopuli'
-        items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
+    speaker_name = "ljspeech"
+    with open(txt_file, "r", encoding="utf-8") as ttf:
+        for line in ttf:
+            cols = line.split("|")
+            wav_file = os.path.join(root_path, "wavs", cols[0])
+            text = cols[2]
+            items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
     return items
 
 
 # Logging parameters
-RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
+RUN_NAME = "GPT_XTTS_v2.0_LJSpeech_FT"
 PROJECT_NAME = "XTTS_trainer"
 DASHBOARD_LOGGER = "tensorboard"
 LOGGER_URI = None
@@ -49,10 +43,10 @@ GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Define here the dataset that you want to use for the fine-tuning on.
 config_dataset = BaseDatasetConfig(
     formatter="my_formatter",
-    dataset_name="facebook-voxpopuli",
-    path=r"../data/facebook_voxpopuli",  # Updated to use the Hugging Face dataset
-    meta_file_train=r"train_metadata.csv",
-    meta_file_val='test_metadata.csv',
+    dataset_name="keithito-ljspeech",
+    path=r"../data/keithito_lj_speech",  # Updated to use the Hugging Face dataset
+    meta_file_train=r"train_metadata.txt",
+    meta_file_val='test_metadata.txt',
     language="en",
 )
 
@@ -116,7 +110,7 @@ def main():
         gpt_use_perceiver_resampler=True,
     )
     # define audio config
-    audio_config = XttsAudioConfig(sample_rate=16000, dvae_sample_rate=22050, output_sample_rate=24000)
+    audio_config = XttsAudioConfig(sample_rate=22050, dvae_sample_rate=22050, output_sample_rate=24000)
     # training parameters config
     config = GPTTrainerConfig(
         output_path=OUT_PATH,
@@ -124,7 +118,7 @@ def main():
         run_name=RUN_NAME,
         project_name=PROJECT_NAME,
         run_description="""
-            GPT XTTS training on facebook/Voxpopuli-Dataset
+            GPT XTTS training on keithito/LJ-Speech-Dataset
             """,
         dashboard_logger=DASHBOARD_LOGGER,
         logger_uri=LOGGER_URI,

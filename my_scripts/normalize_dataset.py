@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 def reformat_dataset(output_dir):
     # Load the dataset
-    dataset = load_dataset('openslr/librispeech_asr', cache_dir='../data', split='train[:10%]+valid')
+    dataset = load_dataset('facebook_download.py', 'en', cache_dir='../data')
 
     # Create output directory structure
     os.makedirs(output_dir, exist_ok=True)
@@ -41,5 +41,5 @@ def reformat_dataset(output_dir):
 
 
 # Usage
-output_directory = "../data/openslr_librispeech_asr"
+output_directory = "../data/facebook_voxpopuli"
 reformat_dataset(output_directory)
