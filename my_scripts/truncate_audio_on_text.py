@@ -21,18 +21,27 @@ def load_whisper_model(model_name="openai/whisper-medium"):
     return processor, model, device
 
 
-def transcribe_audio_with_timestamps(audio_path, processor, model, device):
+def transcribe_audio_with_timestamps(audio_path, processor:WhisperProcessor, model:WhisperForConditionalGeneration, device):
     """Transcribe audio file using Whisper model and return transcription with timestamps."""
     # Load audio
     # dataset = load_dataset("audio", data_files={"audio": audio_path})
     # audio = dataset["audio"][0]["array"]
     audio, sr = librosa.load(audio_path)
+    audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
     # Process audio
-    input_features = processor(audio, sampling_rate=sr, return_tensors="pt").input_features.to(device)
+    input_features = processor(audio, sampling_rate=16000, return_tensors="pt", return_token_timestamps=True)
+    num_frames = input_features.num_frames
+    input_features = input_features.input_features.to(device)
 
     # Generate tokens with timestamps
     with torch.no_grad():
-        generated_tokens = model.generate(input_features, return_timestamps=True)
+        generated_tokens = model.generate(
+            input_features,
+            return_token_timestamps=True,
+            language='en',
+            return_timestamps=True,
+            num_frames=num_frames
+        )
 
     # Decode tokens
     transcription = processor.batch_decode(generated_tokens, skip_special_tokens=True)
