@@ -1,0 +1,5 @@
+ - base-lg-metrics.csv - metrics of base XTTSv2 model on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech)
+ - base-vp-metrics.csv - metrics of base XTTSv2 model on subset of [facebook/voxpopuli](https://huggingface.co/datasets/facebook/voxpopuli)
+ - best-lg-lg-metrics.csv - model fine tuned on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech). Best model checkpoint. metrics on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech)
+ - last-lg-lg-metrics.csv - model fine tuned on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech). Last model checkpoint. metrics on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech)
+ - last-lg-vp-metrics.csv - model fine tuned on [keithito/lj_speech](https://huggingface.co/datasets/keithito/lj_speech). Best model checkpoint. metrics on [facebook/voxpopuli](https://huggingface.co/datasets/facebook/voxpopuli)
