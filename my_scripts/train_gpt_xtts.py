@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import wandb
 from trainer import Trainer, TrainerArgs
 
 from TTS.config.shared_configs import BaseDatasetConfig
@@ -25,7 +26,7 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
             continue
 
         wav_file = os.path.join(root_path, "wavs", row['audio_id'] + '.wav')
-        speaker_name = row['speaker_id'] + '_voxpopuli'
+        speaker_name = str(row['speaker_id']) + '_voxpopuli'
         items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
     return items
 
@@ -35,6 +36,13 @@ RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
 PROJECT_NAME = "XTTS_trainer"
 DASHBOARD_LOGGER = "tensorboard"
 LOGGER_URI = None
+
+wandb.login(key='ea23d6790900d516064c2855c9b120adc06a5025')
+wandb_run = wandb.init(
+    entity='kpi-msai',
+    project='xTTS-training',
+    name=RUN_NAME
+)
 
 # Set here the path that the checkpoints will be saved. Default: ./run/training/
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "training")
@@ -116,7 +124,7 @@ def main():
         gpt_use_perceiver_resampler=True,
     )
     # define audio config
-    audio_config = XttsAudioConfig(sample_rate=16000, dvae_sample_rate=22050, output_sample_rate=24000)
+    audio_config = XttsAudioConfig(sample_rate=22050, dvae_sample_rate=22050, output_sample_rate=24000)
     # training parameters config
     config = GPTTrainerConfig(
         output_path=OUT_PATH,
@@ -163,6 +171,7 @@ def main():
                 "language": LANGUAGE,
             },
         ],
+        # wandb_entity=wandb_run,
     )
 
     # init the model from config
