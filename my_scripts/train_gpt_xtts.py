@@ -10,6 +10,9 @@ from TTS.tts.datasets import load_tts_samples, formatters
 from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrainerConfig, XttsAudioConfig
 from TTS.utils.manage import ModelManager
 
+from my_logger import WandbLogger
+from recipes.vctk.vits.train_vits import output_path
+
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
     """Normalizes the LJSpeech meta data file to TTS format
@@ -33,16 +36,10 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
 
 # Logging parameters
 RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
-PROJECT_NAME = "XTTS_trainer"
-DASHBOARD_LOGGER = "tensorboard"
+PROJECT_NAME = "xTTS-trai"
+DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
 
-wandb.login(key='ea23d6790900d516064c2855c9b120adc06a5025')
-wandb_run = wandb.init(
-    entity='kpi-msai',
-    project='xTTS-training',
-    name=RUN_NAME
-)
 
 # Set here the path that the checkpoints will be saved. Default: ./run/training/
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "training")
@@ -171,7 +168,7 @@ def main():
                 "language": LANGUAGE,
             },
         ],
-        # wandb_entity=wandb_run,
+        wandb_entity='kpi-msai',
     )
 
     # init the model from config
@@ -186,6 +183,13 @@ def main():
         formatter=my_formatter,
     )
 
+    my_logger = WandbLogger(
+        project=PROJECT_NAME,
+        name=RUN_NAME,
+        config=config,
+        entity=config.wandb_entity,
+        )
+
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
@@ -196,6 +200,7 @@ def main():
             grad_accum_steps=GRAD_ACUMM_STEPS,
         ),
         config,
+        dashboard_logger=my_logger,
         output_path=OUT_PATH,
         model=model,
         train_samples=train_samples,
