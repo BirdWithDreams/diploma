@@ -11,7 +11,6 @@ from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrai
 from TTS.utils.manage import ModelManager
 
 from my_logger import WandbLogger
-from recipes.vctk.vits.train_vits import output_path
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
@@ -36,7 +35,7 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
 
 # Logging parameters
 RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
-PROJECT_NAME = "xTTS-trai"
+PROJECT_NAME = "xTTS-training"
 DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
 
@@ -194,6 +193,7 @@ def main():
     trainer = Trainer(
         TrainerArgs(
             restore_path=None,
+            # continue_path='./run/training/GPT_XTTS_v2.0_Voxpopuli_FT-October-19-2024_01+38PM-c7202bff',
             # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,
