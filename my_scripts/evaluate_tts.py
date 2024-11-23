@@ -96,9 +96,10 @@ def torch_rms_norm(wav, db_level=-27.0):
 
 
 def get_ecapa2_spk_embedding(path=None, audio=None, ref_dBFS=None, model_sr=16000):
-    logger.debug("Getting ECAPA2 speaker embedding")
-    if path is not None:
+    if path is not None and path.exists():
         audio, sr = torchaudio.load(path)
+        if audio.size(1) == 0:
+            return None
     elif audio is not None:
         audio, sr = audio
         audio = torch.FloatTensor(audio).unsqueeze(0)
@@ -113,14 +114,12 @@ def get_ecapa2_spk_embedding(path=None, audio=None, ref_dBFS=None, model_sr=1600
 
     # RMS norm based on the reference audio dBFS it make all models output in the same db level and it avoid issues
     if ref_dBFS is not None:
-        logger.debug(f"Applying RMS normalization with reference dBFS: {ref_dBFS}")
         audio = torch_rms_norm(audio, db_level=ref_dBFS)
 
     # compute speaker embedding
     embed = ecapa2(audio.to(device))
     # ensures that l2 norm is applied on output
     embed = torch.nn.functional.normalize(embed, p=2, dim=1)
-    logger.debug("ECAPA2 speaker embedding computed successfully")
     return embed.cpu().detach().squeeze().numpy()
 
 
@@ -143,17 +142,18 @@ def compute_UTMOS(path=None, audio=None, ref_dBFS=None):
     return score
 
 
-def compute_ref_secs(root_path):
+def compute_ref_secs(root_path, speakers=None):
     logger.info(f"Computing reference speaker embeddings for {root_path}")
     root_path = Path(root_path)
     test_file = root_path / 'test_metadata.csv'
     test_meta_df = pd.read_csv(test_file)
-    test_sample = test_meta_df.groupby('speaker_id').sample(15)
+    if speakers is not None and isinstance(speakers, list):
+        test_meta_df = test_meta_df[test_meta_df['speaker_id'].isin(speakers)]
+    test_sample = test_meta_df.groupby('speaker_id').sample(15, replace=True)
     test_sample = test_sample.groupby('speaker_id')['audio_id'].agg(list)
 
     ref_scores = {}
     for speaker_id, speaker_audios in test_sample.items():
-        logger.debug(f"Processing speaker: {speaker_id}")
         speaker_embs = []
 
         audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
@@ -161,14 +161,14 @@ def compute_ref_secs(root_path):
 
         for speaker_audio in speaker_audios:
             audio_path = root_path / 'wavs' / (speaker_audio + '.wav')
-            emb = get_ecapa2_spk_embedding(audio_path, ref_dBFS)
-            speaker_embs.append(emb.reshape((1, -1)))
+            emb = get_ecapa2_spk_embedding(audio_path, ref_dBFS=ref_dBFS)
+            if emb is not None:
+                speaker_embs.append(emb.reshape((1, -1)))
 
         speaker_embs = np.concatenate(speaker_embs)
         speakre_secs = speaker_embs @ speaker_embs.T
         speakre_secs = np.triu(speakre_secs, 1)
         ref_scores[speaker_id] = speakre_secs[speakre_secs != 0].mean()
-        logger.debug(f"Reference score for speaker {speaker_id}: {ref_scores[speaker_id]}")
 
     logger.info("Reference speaker embeddings computed successfully")
     return ref_scores
@@ -206,7 +206,8 @@ def eval_tts(
         prompt_csv='../data/my_tests/prompts.csv',
         sample_size=10,
         dataset_path='../data/keithito_lj_speech',
-        model_path='../checkpoints/good_dataset/'
+        model_path='../checkpoints/good_dataset/',
+        output_name='metrics'
 ):
     logger.info(f"Starting TTS evaluation for model: {model_name}")
     model_path = Path(model_path).resolve()
@@ -214,11 +215,17 @@ def eval_tts(
     logger.info(f"Loaded {len(prompts)} prompts from {prompt_csv}")
 
     logger.info(f"Loading TTS model from {model_path}")
-    model = TTS(
-        model_name='xtts_v2',
-        model_path=model_path.as_posix(),
-        config_path=(model_path / 'config.json').as_posix(),
-    ).to('cuda')
+
+    if model_name =='base_xtts_v2':
+        logger.info('Use base XTTS model')
+        model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to('cuda')
+    else:
+        logger.info('Use model from checkpoint')
+        model = TTS(
+            model_name='xtts_v2',
+            model_path=model_path.as_posix(),
+            config_path=(model_path / 'config.json').as_posix(),
+        ).to('cuda')
     logger.debug("TTS model loaded successfully")
 
     dataset_path = Path(dataset_path).resolve()
@@ -227,7 +234,7 @@ def eval_tts(
     logger.info(f"Loaded {len(speakers)} speakers from {speakers_path}")
 
     logger.info("Computing reference speaker embeddings")
-    ref_speakers_secs = compute_ref_secs(dataset_path)
+    ref_speakers_secs = compute_ref_secs(dataset_path, speakers['speaker_id'].tolist())
 
     metrics = []
     total_iterations = len(prompts) * len(speakers) * sample_size
@@ -271,7 +278,7 @@ def eval_tts(
             'secs': secs_metric,
             'utmos': utmos_metric,
         }
-        
+
         row |= {
             'prompt': prompt['prompt'],
             'transcription': transcription,
@@ -281,7 +288,7 @@ def eval_tts(
         logger.debug(f"Metrics for current iteration: {row}")
 
     metrics_df = pd.DataFrame(metrics)
-    output_path = dataset_path / 'metrics.csv'
+    output_path = dataset_path / f'{output_name}.csv'
     logger.info(f"Saving metrics to {output_path}")
     metrics_df.to_csv(output_path, index=False)
     logger.info("Evaluation completed successfully")
