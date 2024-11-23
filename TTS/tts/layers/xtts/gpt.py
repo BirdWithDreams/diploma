@@ -379,17 +379,21 @@ class GPT(nn.Module):
         cond_latents=None,
         return_attentions=False,
         return_latent=False,
+        reduction='mean',
     ):
         """
         Forward pass that uses both text and voice in either text conditioning mode or voice conditioning mode
         (actuated by `text_first`).
 
-        text_inputs: long tensor, (b,t)
-        text_lengths: long tensor, (b,)
-        mel_inputs:  long tensor, (b,m)
-        wav_lengths: long tensor, (b,)
-        cond_mels: MEL float tensor, (b, 1, 80,s)
-        cond_idxs: cond start and end indexs, (b, 2)
+        :param text_inputs: long tensor, (b,t)
+        :param text_lengths: long tensor, (b,)
+        :param audio_codes: long tensor, (b,t), target dvae ids
+        :param mel_inputs:  long tensor, (b,m)
+        :param wav_lengths: long tensor, (b,)
+        :param cond_mels: MEL float tensor, (b, 1, 80,s)
+        :param cond_idxs: cond start and end indexs, (b, 2)
+
+        :return: (text_loss, mel_loss, mel_logits)
 
         If return_attentions is specified, only logits are returned.
         If return_latent is specified, loss & logits are not computed or returned. Only the predicted latents are returned.
@@ -547,12 +551,16 @@ class GPT(nn.Module):
 
         # Compute losses
         loss_text = F.cross_entropy(
-            text_logits, text_targets.long(), ignore_index=-1, label_smoothing=self.label_smoothing
+            text_logits, text_targets.long(), ignore_index=-1, label_smoothing=self.label_smoothing, reduction=reduction,
         )
+
         loss_mel = F.cross_entropy(
-            mel_logits, mel_targets.long(), ignore_index=-1, label_smoothing=self.label_smoothing
+            mel_logits, mel_targets.long(), ignore_index=-1, label_smoothing=self.label_smoothing, reduction=reduction,
         )
-        return loss_text.mean(), loss_mel.mean(), mel_logits
+        if reduction == 'none':
+            return loss_text, loss_mel, (mel_logits, mel_targets.long())
+        if reduction == 'mean':
+            return loss_text.mean(), loss_mel.mean(), (mel_logits, mel_targets.long())
 
     def inference(self, cond_latents, text_inputs, **hf_generate_kwargs):
         self.compute_embeddings(cond_latents, text_inputs)

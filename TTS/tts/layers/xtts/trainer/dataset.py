@@ -191,6 +191,7 @@ class XTTSDataset(torch.utils.data.Dataset):
             if cond_len is not torch.nan
             else torch.tensor([cond_len]),
             "cond_idxs": torch.tensor(cond_idxs) if cond_idxs is not torch.nan else torch.tensor([cond_idxs]),
+            'sample': sample
         }
         return res
 

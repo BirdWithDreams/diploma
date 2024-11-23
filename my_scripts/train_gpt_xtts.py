@@ -11,7 +11,6 @@ from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrai
 from TTS.utils.manage import ModelManager
 
 from my_logger import WandbLogger
-from recipes.vctk.vits.train_vits import output_path
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
@@ -41,8 +40,10 @@ DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
 
 
+project_root = r'D:\Учеба\КПИ\Diploma\TTS'
+
 # Set here the path that the checkpoints will be saved. Default: ./run/training/
-OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "training")
+OUT_PATH = os.path.join(project_root, "runs/training")
 
 # Training Parameters
 OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
@@ -55,7 +56,7 @@ GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 config_dataset = BaseDatasetConfig(
     formatter="my_formatter",
     dataset_name="facebook-voxpopuli",
-    path=r"../data/facebook_voxpopuli",  # Updated to use the Hugging Face dataset
+    path=os.path.join(project_root, "data/facebook_voxpopuli"),  # Updated to use the Hugging Face dataset
     meta_file_train=r"train_metadata.csv",
     meta_file_val='test_metadata.csv',
     language="en",
@@ -97,7 +98,7 @@ if not os.path.isfile(TOKENIZER_FILE) or not os.path.isfile(XTTS_CHECKPOINT):
     )
 
 # Training sentences generations
-SPEAKER_REFERENCE = ["../data/speakers/LJ001-0001.wav"]
+SPEAKER_REFERENCE = [os.path.join(project_root, "data/speakers/LJ001-0001.wav")]
 # SPEAKER_REFERENCE = list(Path('../data/speakers/').glob('*.wav'))
 LANGUAGE = config_dataset.language
 
@@ -168,7 +169,7 @@ def main():
                 "language": LANGUAGE,
             },
         ],
-        wandb_entity='kpi-msai',
+        # wandb_entity='kpi-msai',
     )
 
     # init the model from config
@@ -193,10 +194,10 @@ def main():
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
-            restore_path=None,
+            restore_path=None,#'../runs/training/GPT_XTTS_v2.0_Voxpopuli_FT-November-16-2024_10+27AM-0000000',
             # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
-            start_with_eval=START_WITH_EVAL,
+            start_with_eval=False,#START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
         ),
         config,

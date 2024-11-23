@@ -528,6 +528,7 @@ class Xtts(BaseTTS):
             text = [text]
 
         wavs = []
+        gpt_codes_list = []
         gpt_latents_list = []
         for sent in text:
             sent = sent.strip().lower()
@@ -553,6 +554,7 @@ class Xtts(BaseTTS):
                     output_attentions=False,
                     **hf_generate_kwargs,
                 )
+                gpt_codes_list.append(gpt_codes.cpu().numpy())
                 expected_output_len = torch.tensor(
                     [gpt_codes.shape[-1] * self.gpt.code_stride_len], device=text_tokens.device
                 )
@@ -579,6 +581,7 @@ class Xtts(BaseTTS):
         return {
             "wav": torch.cat(wavs, dim=0).numpy(),
             "gpt_latents": torch.cat(gpt_latents_list, dim=1).numpy(),
+            "gpt_codes": gpt_codes_list,
             "speaker_embedding": speaker_embedding,
         }
 

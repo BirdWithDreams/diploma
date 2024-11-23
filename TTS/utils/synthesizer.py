@@ -285,6 +285,7 @@ class Synthesizer(nn.Module):
         """
         start_time = time.time()
         wavs = []
+        gpt_codes = []
 
         if not text and not reference_wav:
             raise ValueError(
@@ -408,6 +409,7 @@ class Synthesizer(nn.Module):
                         language_id=language_id,
                     )
                 waveform = outputs["wav"]
+                gpt_codes.extend(outputs['gpt_codes'])
                 if not use_gl:
                     mel_postnet_spec = outputs["outputs"]["model_outputs"][0].detach().cpu().numpy()
                     # denormalize tts output based on tts audio config
@@ -502,4 +504,4 @@ class Synthesizer(nn.Module):
         audio_time = len(wavs) / self.tts_config.audio["sample_rate"]
         print(f" > Processing time: {process_time}")
         print(f" > Real-time factor: {process_time / audio_time}")
-        return wavs
+        return wavs, gpt_codes

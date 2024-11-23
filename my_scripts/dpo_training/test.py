@@ -1,37 +1,56 @@
 import os
 from pathlib import Path
 
+import pandas as pd
+import torch
 from trainer import Trainer, TrainerArgs
 
 from TTS.config.shared_configs import BaseDatasetConfig
-from TTS.tts.datasets import load_tts_samples, formatters
-from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrainerConfig, XttsAudioConfig
+from TTS.tts.datasets import load_tts_samples
+from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainerConfig, XttsAudioConfig
 from TTS.utils.manage import ModelManager
+from dpo_trainer import DPOTrainer
+from my_logger import WandbLogger
+from my_scripts.dpo_training.dpo_trainer import DPOArgs
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
     """Normalizes the LJSpeech meta data file to TTS format
     https://keithito.com/LJ-Speech-Dataset/"""
-    txt_file = os.path.join(root_path, meta_file)
+    meta_file_path = os.path.join(root_path, meta_file)
+    meta_df = pd.read_parquet(meta_file_path)
     items = []
-    speaker_name = "ljspeech"
-    with open(txt_file, "r", encoding="utf-8") as ttf:
-        for line in ttf:
-            cols = line.split("|")
-            wav_file = os.path.join(root_path, "wavs", cols[0])
-            text = cols[2]
-            items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
+    for _, row in meta_df.iterrows():
+        text = row['text']
+        if not isinstance(text, str):
+            continue
+
+        if len(text.strip()) == 0:
+            continue
+
+        wav_file = os.path.join(root_path, "wavs", row['audio_id'])
+        speaker_name = str(row['speaker_id'])
+        items.append({
+            "text": text,
+            "audio_file": wav_file,
+            "speaker_name": speaker_name,
+            "root_path": root_path,
+            "mel_cond_w": torch.LongTensor(row['mel_cond_w']),
+            "mel_cond_l": torch.LongTensor(row['mel_cond_l']),
+        })
     return items
 
 
 # Logging parameters
-RUN_NAME = "GPT_XTTS_v2.0_LJSpeech_FT"
-PROJECT_NAME = "XTTS_trainer"
-DASHBOARD_LOGGER = "tensorboard"
+RUN_NAME = "DPO_Training_Debug"
+PROJECT_NAME = "xTTS-trai"
+DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
 
+project_root = r'D:\Учеба\КПИ\Diploma\TTS'
+
 # Set here the path that the checkpoints will be saved. Default: ./run/training/
-OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "training")
+OUT_PATH = os.path.join(project_root, "runs/training")
 
 # Training Parameters
 OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
@@ -43,10 +62,11 @@ GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Define here the dataset that you want to use for the fine-tuning on.
 config_dataset = BaseDatasetConfig(
     formatter="my_formatter",
-    dataset_name="keithito-ljspeech",
-    path=r"../data/keithito_lj_speech",  # Updated to use the Hugging Face dataset
-    meta_file_train=r"train_metadata.txt",
-    meta_file_val='test_metadata.txt',
+    dataset_name="dpo_dataset",
+    path=os.path.join(project_root, 'data/dpo_dataset'),  # Updated to use the Hugging Face dataset
+    # meta_file_train=r"train_metadata.csv",
+    # meta_file_val='test_metadata.csv',
+    meta_file_train='metadata.parquet',
     language="en",
 )
 
@@ -86,14 +106,13 @@ if not os.path.isfile(TOKENIZER_FILE) or not os.path.isfile(XTTS_CHECKPOINT):
     )
 
 # Training sentences generations
-SPEAKER_REFERENCE = ["../data/speakers/LJ001-0001.wav"]
+SPEAKER_REFERENCE = [os.path.join(project_root, "data/speakers/LJ001-0001.wav")]
 # SPEAKER_REFERENCE = list(Path('../data/speakers/').glob('*.wav'))
 LANGUAGE = config_dataset.language
 
-
 def main():
     # init args and config
-    model_args = GPTArgs(
+    model_args = DPOArgs(
         max_conditioning_length=132300,  # 6 secs
         min_conditioning_length=66150,  # 3 secs
         debug_loading_failures=False,
@@ -118,7 +137,7 @@ def main():
         run_name=RUN_NAME,
         project_name=PROJECT_NAME,
         run_description="""
-            GPT XTTS training on keithito/LJ-Speech-Dataset
+            GPT XTTS training on facebook/Voxpopuli-Dataset
             """,
         dashboard_logger=DASHBOARD_LOGGER,
         logger_uri=LOGGER_URI,
@@ -129,7 +148,7 @@ def main():
         num_loader_workers=8,
         eval_split_max_size=1000,
         eval_split_size=0.1,
-        print_step=50,
+        print_step=1,
         plot_step=100,
         log_model_step=1000,
         save_step=10000,
@@ -157,10 +176,11 @@ def main():
                 "language": LANGUAGE,
             },
         ],
+        # wandb_entity='kpi-msai',
     )
 
     # init the model from config
-    model = GPTTrainer.init_from_config(config)
+    model = DPOTrainer.init_from_config(config)
 
     # load training samples
     train_samples, eval_samples = load_tts_samples(
@@ -171,16 +191,24 @@ def main():
         formatter=my_formatter,
     )
 
+    my_logger = WandbLogger(
+        project=PROJECT_NAME,
+        name=RUN_NAME,
+        config=config,
+        entity=config.wandb_entity,
+        )
+
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
-            restore_path=None,
+            restore_path=None,#'./run/training/GPT_XTTS_v2.0_Voxpopuli_FT-November-16-2024_10+27AM-0000000',
             # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
-            start_with_eval=START_WITH_EVAL,
+            start_with_eval=False,  # START_WITH_EVAL,
             grad_accum_steps=GRAD_ACUMM_STEPS,
         ),
         config,
+        dashboard_logger=my_logger,
         output_path=OUT_PATH,
         model=model,
         train_samples=train_samples,
