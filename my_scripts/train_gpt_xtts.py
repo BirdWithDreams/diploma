@@ -14,27 +14,25 @@ from my_logger import WandbLogger
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
-    """Normalizes the LJSpeech meta data file to TTS format
-    https://keithito.com/LJ-Speech-Dataset/"""
     meta_file_path = os.path.join(root_path, meta_file)
     meta_df = pd.read_csv(meta_file_path)
     items = []
     for _, row in meta_df.iterrows():
-        text = row['raw_text']
+        text = row['text']
         if not isinstance(text, str):
             continue
 
         if len(text.strip()) == 0:
             continue
 
-        wav_file = os.path.join(root_path, "wavs", row['audio_id'] + '.wav')
-        speaker_name = str(row['speaker_id']) + '_voxpopuli'
+        wav_file = os.path.join(root_path, "wavs", row['audio_id'])
+        speaker_name = str(row['speaker_id'])
         items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
     return items
 
 
 # Logging parameters
-RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
+RUN_NAME = "VCTK_base_FN"
 PROJECT_NAME = "xTTS-training"
 DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
@@ -45,7 +43,7 @@ OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run", "trai
 
 # Training Parameters
 OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
-START_WITH_EVAL = True  # if True it will star with evaluation
+START_WITH_EVAL = False  # if True it will star with evaluation
 BATCH_SIZE = 4  # set here the batch size
 GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Note: we recommend that BATCH_SIZE * GRAD_ACUMM_STEPS need to be at least 252 for more efficient training. You can increase/decrease BATCH_SIZE but then set GRAD_ACUMM_STEPS accordingly.
@@ -53,8 +51,8 @@ GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Define here the dataset that you want to use for the fine-tuning on.
 config_dataset = BaseDatasetConfig(
     formatter="my_formatter",
-    dataset_name="facebook-voxpopuli",
-    path=r"../data/facebook_voxpopuli",  # Updated to use the Hugging Face dataset
+    dataset_name="vctk-dataset",
+    path=r"../data/VCTK-Corpus",  # Updated to use the Hugging Face dataset
     meta_file_train=r"train_metadata.csv",
     meta_file_val='test_metadata.csv',
     language="en",
@@ -193,7 +191,6 @@ def main():
     trainer = Trainer(
         TrainerArgs(
             restore_path=None,
-            # continue_path='./run/training/GPT_XTTS_v2.0_Voxpopuli_FT-October-19-2024_01+38PM-c7202bff',
             # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
             start_with_eval=START_WITH_EVAL,

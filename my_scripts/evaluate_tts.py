@@ -155,12 +155,17 @@ def compute_ref_secs(root_path, speakers=None):
     ref_scores = {}
     for speaker_id, speaker_audios in test_sample.items():
         speaker_embs = []
-
-        audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
+        if speaker_audios[0].endswith('.wav'):
+            audio_path = root_path / 'wavs' / speaker_audios[0]
+        else:
+            audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
         ref_dBFS = AudioSegment.from_file(audio_path).dBFS
 
         for speaker_audio in speaker_audios:
-            audio_path = root_path / 'wavs' / (speaker_audio + '.wav')
+            if speaker_audios[0].endswith('.wav'):
+                audio_path = root_path / 'wavs' / speaker_audios[0]
+            else:
+                audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
             emb = get_ecapa2_spk_embedding(audio_path, ref_dBFS=ref_dBFS)
             if emb is not None:
                 speaker_embs.append(emb.reshape((1, -1)))
@@ -202,12 +207,12 @@ def compute_text_metrics(text, transcription):
 
 
 def eval_tts(
-        model_name,
+        model_name='last-lg-fn',
         prompt_csv='../data/my_tests/prompts.csv',
         sample_size=10,
-        dataset_path='../data/keithito_lj_speech',
-        model_path='../checkpoints/good_dataset/',
-        output_name='metrics'
+        dataset_path='../data/facebook_voxpopuli',
+        model_path='../checkpoints/lg_last/',
+        output_name='last-lg-vp-metrics-2.csv'
 ):
     logger.info(f"Starting TTS evaluation for model: {model_name}")
     model_path = Path(model_path).resolve()
@@ -216,7 +221,7 @@ def eval_tts(
 
     logger.info(f"Loading TTS model from {model_path}")
 
-    if model_name =='base_xtts_v2':
+    if model_name == 'base_xtts_v2':
         logger.info('Use base XTTS model')
         model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to('cuda')
     else:
@@ -230,7 +235,7 @@ def eval_tts(
 
     dataset_path = Path(dataset_path).resolve()
     speakers_path = dataset_path / 'speakers.csv'
-    speakers = pd.read_csv(speakers_path)
+    speakers = pd.read_csv(speakers_path).iloc[:2]
     logger.info(f"Loaded {len(speakers)} speakers from {speakers_path}")
 
     logger.info("Computing reference speaker embeddings")
