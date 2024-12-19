@@ -1,17 +1,20 @@
 import os
-from pathlib import Path
 
+import librosa
+import numpy as np
 import pandas as pd
 import torch
 from trainer import Trainer, TrainerArgs
 
 from TTS.config.shared_configs import BaseDatasetConfig
+from TTS.tts.configs.vits_config import VitsConfig
 from TTS.tts.datasets import load_tts_samples
-from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainerConfig, XttsAudioConfig
+from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTTrainerConfig, XttsAudioConfig
 from TTS.utils.manage import ModelManager
 from dpo_trainer import DPOTrainer
 from my_logger import WandbLogger
-from my_scripts.dpo_training.dpo_trainer import DPOArgs
+from dpo_trainer import DPOArgs
+from evaluate_tts import compute_text_metrics, compute_audio_metric, pipe
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
@@ -30,15 +33,70 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
 
         wav_file = os.path.join(root_path, "wavs", row['audio_id'])
         speaker_name = str(row['speaker_id'])
-        items.append({
-            "text": text,
-            "audio_file": wav_file,
-            "speaker_name": speaker_name,
-            "root_path": root_path,
-            "mel_cond_w": torch.LongTensor(row['mel_cond_w']),
-            "mel_cond_l": torch.LongTensor(row['mel_cond_l']),
-        })
+        items.append(
+            {
+                "text": text,
+                "audio_file": wav_file,
+                "speaker_name": speaker_name,
+                "root_path": root_path,
+                "mel_cond_w": torch.LongTensor(row['mel_cond_w']),
+                "mel_cond_l": torch.LongTensor(row['mel_cond_l']),
+            }
+        )
     return items
+
+
+def evaluate_model(trainer: DPOTrainer):
+    prompts = pd.read_csv("../../data/my_tests/prompts.csv", index_col=0)
+    model = trainer.model.xtts
+
+    speaker_wav, sr = librosa.load("../../data/dpo_dataset/wavs/LJ001-0001.wav", sr=22050)
+
+    generate_config = VitsConfig()
+
+    metrics = []
+    for gen_i in range(10):
+        for id_, prompt in enumerate(prompts['prompt']):
+            output = model.synthesize(
+                prompt,
+                model.config,
+                speaker_wav=speaker_wav,
+                language='en',
+            )
+
+            wave = output['wav']
+            wave = np.array(wave, dtype=np.float32)
+
+            transcription = pipe(wave)
+            transcription = transcription['text']
+
+            text_metrics = compute_text_metrics(prompt['prompt'], transcription)
+            secs_metric, utmos_metric = compute_audio_metric((wave, 22050), "LJ001-0001.wav", config_dataset.path)
+
+            row = {
+                'prompt_id': id_,
+                'gen': gen_i,
+            }
+            row |= text_metrics
+            row |= {
+                'secs': secs_metric,
+                'utmos': utmos_metric,
+            }
+            #
+            # row |= {
+            #     'prompt': prompt['prompt'],
+            #     'transcription': transcription,
+            # }
+
+            metrics.append(row)
+
+    metrics = pd.DataFrame(metrics)
+    metrics = metrics.groupby('prompt_id')[['cer', 'mer', 'wer', 'wil', 'wip', 'ref_secs', 'secs', 'utmos']].mean()
+    metrics = metrics.mean()
+    trainer.dashboard_logger.add_scalars('eval', metrics.to_dict(), trainer.total_steps_done)
+
+
+
 
 
 # Logging parameters
@@ -109,6 +167,7 @@ if not os.path.isfile(TOKENIZER_FILE) or not os.path.isfile(XTTS_CHECKPOINT):
 SPEAKER_REFERENCE = [os.path.join(project_root, "data/speakers/LJ001-0001.wav")]
 # SPEAKER_REFERENCE = list(Path('../data/speakers/').glob('*.wav'))
 LANGUAGE = config_dataset.language
+
 
 def main():
     # init args and config
@@ -196,12 +255,12 @@ def main():
         name=RUN_NAME,
         config=config,
         entity=config.wandb_entity,
-        )
+    )
 
     # init the trainer and 🚀
     trainer = Trainer(
         TrainerArgs(
-            restore_path=None,#'./run/training/GPT_XTTS_v2.0_Voxpopuli_FT-November-16-2024_10+27AM-0000000',
+            restore_path=None,  # './run/training/GPT_XTTS_v2.0_Voxpopuli_FT-November-16-2024_10+27AM-0000000',
             # xtts checkpoint is restored via xtts_checkpoint key so no need of restore it using Trainer restore_path parameter
             skip_train_epoch=False,
             start_with_eval=False,  # START_WITH_EVAL,
@@ -213,6 +272,7 @@ def main():
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
+        callbacks={'on_epoch_end': evaluate_model}
     )
     trainer.fit()
 
