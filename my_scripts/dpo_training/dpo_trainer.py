@@ -187,7 +187,7 @@ class DPOTrainer(BaseTTS):
         cond_lens: long tensor, (b,)
         """
         with torch.inference_mode():
-            _, ref_mel_loss_w, (ref_logits_w, ref_target_w) = self.ref_xtts.gpt(
+            ref_text_loss_w, ref_mel_loss_w, (ref_logits_w, ref_target_w) = self.ref_xtts.gpt(
                 text_inputs,
                 text_lengths,
                 mel_cond_w,
@@ -197,7 +197,7 @@ class DPOTrainer(BaseTTS):
                 cond_lens=cond_lens,
                 reduction='none',
             )
-            _, ref_mel_loss_l, (ref_logits_l, ref_target_l) = self.ref_xtts.gpt(
+            ref_text_loss_l, ref_mel_loss_l, (ref_logits_l, ref_target_l) = self.ref_xtts.gpt(
                 text_inputs,
                 text_lengths,
                 mel_cond_l,
@@ -207,7 +207,8 @@ class DPOTrainer(BaseTTS):
                 cond_lens=cond_lens,
                 reduction='none',
             )
-        _, mel_loss_w, (logits_w, target_w) = self.xtts.gpt(
+
+        text_loss_w, mel_loss_w, (logits_w, target_w) = self.xtts.gpt(
             text_inputs,
             text_lengths,
             mel_cond_w,
@@ -217,7 +218,7 @@ class DPOTrainer(BaseTTS):
             cond_lens=cond_lens,
             reduction='none',
         )
-        _, mel_loss_l, (logits_l, target_l) = self.xtts.gpt(
+        text_loss_l, mel_loss_l, (logits_l, target_l) = self.xtts.gpt(
             text_inputs,
             text_lengths,
             mel_cond_l,
@@ -233,8 +234,16 @@ class DPOTrainer(BaseTTS):
         ref_mel_loss_w = -ref_mel_loss_w
         ref_mel_loss_l = -ref_mel_loss_l
 
-        loss_w = mel_loss_w - ref_mel_loss_w
-        loss_l = mel_loss_l - ref_mel_loss_l
+        m_loss_w = mel_loss_w - ref_mel_loss_w
+        m_loss_l = mel_loss_l - ref_mel_loss_l
+
+        text_loss_w = -text_loss_w
+        text_loss_l = -text_loss_l
+        ref_text_loss_w = -ref_text_loss_w
+        ref_text_loss_l = -ref_text_loss_l
+
+        t_loss_w = text_loss_w - ref_text_loss_w
+        t_loss_l = text_loss_l - ref_text_loss_l
 
         # return (ref_logits_w, ref_logits_l), (logits_w, logits_l), (loss_w, loss_l)
         return {
@@ -246,8 +255,15 @@ class DPOTrainer(BaseTTS):
             'logits_l': logits_l,
             'mel_loss_w': mel_loss_w,
             'mel_loss_l': mel_loss_l,
-            'loss_w': loss_w,
-            'loss_l': loss_l,
+            'm_loss_w': m_loss_w,
+            'm_loss_l': m_loss_l,
+
+            'text_loss_w': text_loss_w,
+            'text_loss_l': text_loss_l,
+            'ref_text_loss_w': ref_text_loss_w,
+            'ref_text_loss_l': ref_text_loss_l,
+            't_loss_w': t_loss_w,
+            't_loss_l': t_loss_l,
         }
 
     @torch.no_grad()
@@ -337,14 +353,30 @@ class DPOTrainer(BaseTTS):
             text_inputs, text_lengths, wav_lengths, cond_mels, cond_idxs, cond_lens, mel_cond_w, mel_cond_l
         )
 
-        loss = torch.log(torch.sigmoid(self.args.beta*(output['loss_w'] - output['loss_l']))).mean()
+        m_loss = -torch.log(torch.sigmoid(self.args.beta*(output['m_loss_w'] - output['m_loss_l']))).mean()
+        t_loss = -output['text_loss_w'].mean()  #-torch.log(torch.sigmoid(self.args.beta*(output['t_loss_w'] - output['t_loss_l']))).mean()
+
+        m_loss = m_loss * self.args.gpt_loss_mel_ce_weight
+        t_loss = t_loss * self.args.gpt_loss_text_ce_weight
+
+        loss = m_loss + t_loss
 
         loss_dict['loss_ref_mel_w'] = output['ref_mel_loss_w'].mean()
         loss_dict['loss_ref_mel_l'] = output['ref_mel_loss_l'].mean()
         loss_dict['loss_mel_w'] = output['mel_loss_w'].mean()
         loss_dict['loss_mel_l'] = output['mel_loss_l'].mean()
-        loss_dict['loss_w'] = output['loss_w'].mean()
-        loss_dict['loss_l'] = output['loss_l'].mean()
+        loss_dict['m_loss_w'] = output['m_loss_w'].mean()
+        loss_dict['m_loss_l'] = output['m_loss_l'].mean()
+
+        loss_dict['loss_ref_text_w'] = output['ref_text_loss_w'].mean()
+        loss_dict['loss_ref_text_l'] = output['ref_text_loss_l'].mean()
+        loss_dict['loss_text_w'] = output['text_loss_w'].mean()
+        loss_dict['loss_text_l'] = output['text_loss_l'].mean()
+        loss_dict['t_loss_w'] = output['t_loss_w'].mean()
+        loss_dict['t_loss_l'] = output['t_loss_l'].mean()
+
+        loss_dict['m_loss'] = m_loss
+        loss_dict['t_loss'] = t_loss
         loss_dict['loss'] = loss
         return {"model_outputs": None}, loss_dict
 

@@ -109,7 +109,7 @@ def get_ecapa2_spk_embedding(path=None, audio=None, ref_dBFS=None, model_sr=1600
 
     # sample rate of 16 kHz expected
     if sr != model_sr:
-        logger.debug(f"Resampling audio from {sr} Hz to {model_sr} Hz")
+        # logger.debug(f"Resampling audio from {sr} Hz to {model_sr} Hz")
         audio = torchaudio.functional.resample(audio, sr, model_sr)
 
     # RMS norm based on the reference audio dBFS it make all models output in the same db level and it avoid issues
@@ -124,7 +124,7 @@ def get_ecapa2_spk_embedding(path=None, audio=None, ref_dBFS=None, model_sr=1600
 
 
 def compute_UTMOS(path=None, audio=None, ref_dBFS=None):
-    logger.debug("Computing UTMOS score")
+    # logger.debug("Computing UTMOS score")
     if path is not None:
         audio, sr = librosa.load(path, sr=None, mono=True)
     elif audio is not None:
@@ -138,7 +138,7 @@ def compute_UTMOS(path=None, audio=None, ref_dBFS=None):
     audio = torch_rms_norm(audio, db_level=ref_dBFS)
     # predict UTMOS
     score = mos_predictor(audio.to(device), sr).item()
-    logger.debug(f"UTMOS score computed: {score}")
+    # logger.debug(f"UTMOS score computed: {score}")
     return score
 
 
@@ -175,10 +175,10 @@ def compute_ref_secs(root_path, speakers=None):
 
 
 def compute_audio_metric(gen_wave, ref_audio_id, root_path):
-    logger.debug(f"Computing audio metrics for reference audio: {ref_audio_id}")
+    # logger.debug(f"Computing audio metrics for reference audio: {ref_audio_id}")
     # if isinstance(root_path, Path):
     #     root_path = str(root_path)
-
+    root_path = Path(root_path)
     if ref_audio_id.endswith('.wav'):
         audio_path = root_path / 'wavs' / ref_audio_id
     else:
@@ -190,12 +190,12 @@ def compute_audio_metric(gen_wave, ref_audio_id, root_path):
     secs = gen_emb @ ref_emb
 
     utmos = compute_UTMOS(audio=gen_wave, ref_dBFS=ref_dBFS)
-    logger.debug(f"Audio metrics computed: SECS={secs}, UTMOS={utmos}")
+    # logger.debug(f"Audio metrics computed: SECS={secs}, UTMOS={utmos}")
     return secs, utmos
 
 
 def compute_text_metrics(text, transcription):
-    logger.debug("Computing text metrics")
+    # logger.debug("Computing text metrics")
     m = {}
     for metric_name, metric_func in metric_funcs.items():
         m[metric_name] = metric_func(
@@ -204,7 +204,7 @@ def compute_text_metrics(text, transcription):
             truth_transform=transforms,
             hypothesis_transform=transforms,
         )
-    logger.debug(f"Text metrics computed: {m}")
+    # logger.debug(f"Text metrics computed: {m}")
     return m
 
 
