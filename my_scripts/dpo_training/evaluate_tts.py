@@ -15,7 +15,7 @@ import transformers
 from huggingface_hub import hf_hub_download
 from loguru import logger
 from pydub import AudioSegment
-from transformers import pipeline
+from transformers import pipeline, AutoModelForSpeechSeq2Seq, AutoProcessor
 
 from TTS.api import TTS
 
@@ -60,11 +60,24 @@ logger.debug("UTMOS model loaded successfully")
 
 model_name = "openai/whisper-medium"
 logger.info(f"Setting up ASR pipeline with model: {model_name}")
+model_name = "openai/whisper-medium"
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+model = AutoModelForSpeechSeq2Seq.from_pretrained(
+    model_name, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+)
+model.to(device)
+
+processor = AutoProcessor.from_pretrained(model_name)
+
 pipe = pipeline(
     "automatic-speech-recognition",
-    model=model_name,
-    chunk_length_s=30,
-    device='cuda',
+    model=model,
+    tokenizer=processor.tokenizer,
+    feature_extractor=processor.feature_extractor,
+    torch_dtype=torch_dtype,
+    device=device,
 )
 logger.debug("ASR pipeline set up successfully")
 
@@ -156,11 +169,20 @@ def compute_ref_secs(root_path, speakers=None):
     for speaker_id, speaker_audios in test_sample.items():
         speaker_embs = []
 
-        audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
+        ref_audio_id = speaker_audios[0]
+        if ref_audio_id.endswith('.wav'):
+            audio_path = root_path / 'wavs' / ref_audio_id
+        else:
+            audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
+
         ref_dBFS = AudioSegment.from_file(audio_path).dBFS
 
         for speaker_audio in speaker_audios:
-            audio_path = root_path / 'wavs' / (speaker_audio + '.wav')
+            ref_audio_id = speaker_audio
+            if ref_audio_id.endswith('.wav'):
+                audio_path = root_path / 'wavs' / ref_audio_id
+            else:
+                audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
             emb = get_ecapa2_spk_embedding(audio_path, ref_dBFS=ref_dBFS)
             if emb is not None:
                 speaker_embs.append(emb.reshape((1, -1)))
@@ -175,10 +197,8 @@ def compute_ref_secs(root_path, speakers=None):
 
 
 def compute_audio_metric(gen_wave, ref_audio_id, root_path):
-    # logger.debug(f"Computing audio metrics for reference audio: {ref_audio_id}")
-    # if isinstance(root_path, Path):
-    #     root_path = str(root_path)
-    root_path = Path(root_path)
+    logger.debug(f"Computing audio metrics for reference audio: {ref_audio_id}")
+
     if ref_audio_id.endswith('.wav'):
         audio_path = root_path / 'wavs' / ref_audio_id
     else:
@@ -190,7 +210,7 @@ def compute_audio_metric(gen_wave, ref_audio_id, root_path):
     secs = gen_emb @ ref_emb
 
     utmos = compute_UTMOS(audio=gen_wave, ref_dBFS=ref_dBFS)
-    # logger.debug(f"Audio metrics computed: SECS={secs}, UTMOS={utmos}")
+    logger.debug(f"Audio metrics computed: SECS={secs}, UTMOS={utmos}")
     return secs, utmos
 
 

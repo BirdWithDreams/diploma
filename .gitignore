@@ -172,3 +172,7 @@ local_scripts/*
 coqui_demos/*
 
 *.json
+*.parquet
+*.csv
+
+runs

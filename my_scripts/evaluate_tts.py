@@ -156,11 +156,20 @@ def compute_ref_secs(root_path, speakers=None):
     for speaker_id, speaker_audios in test_sample.items():
         speaker_embs = []
 
-        audio_path = root_path / 'wavs' / (speaker_audios[0] + '.wav')
+        ref_audio_id = speaker_audios[0]
+        if ref_audio_id.endswith('.wav'):
+            audio_path = root_path / 'wavs' / ref_audio_id
+        else:
+            audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
+
         ref_dBFS = AudioSegment.from_file(audio_path).dBFS
 
         for speaker_audio in speaker_audios:
-            audio_path = root_path / 'wavs' / (speaker_audio + '.wav')
+            ref_audio_id = speaker_audio
+            if ref_audio_id.endswith('.wav'):
+                audio_path = root_path / 'wavs' / ref_audio_id
+            else:
+                audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
             emb = get_ecapa2_spk_embedding(audio_path, ref_dBFS=ref_dBFS)
             if emb is not None:
                 speaker_embs.append(emb.reshape((1, -1)))
@@ -176,7 +185,12 @@ def compute_ref_secs(root_path, speakers=None):
 
 def compute_audio_metric(gen_wave, ref_audio_id, root_path):
     logger.debug(f"Computing audio metrics for reference audio: {ref_audio_id}")
-    audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
+
+    if ref_audio_id.endswith('.wav'):
+        audio_path = root_path / 'wavs' / ref_audio_id
+    else:
+        audio_path = root_path / 'wavs' / (ref_audio_id + '.wav')
+
     ref_dBFS = AudioSegment.from_file(audio_path.resolve()).dBFS
     gen_emb = get_ecapa2_spk_embedding(audio=gen_wave, ref_dBFS=ref_dBFS)
     ref_emb = get_ecapa2_spk_embedding(path=audio_path, ref_dBFS=ref_dBFS)
@@ -222,9 +236,9 @@ def eval_tts(
     else:
         logger.info('Use model from checkpoint')
         model = TTS(
-            model_name='xtts_v2',
+            # model_name='xtts_v2',
             model_path=model_path.as_posix(),
-            config_path=(model_path / 'config.json').as_posix(),
+            config_path='/workspace/Projects/diploma/runs/training/GPT_XTTS_Triple_Dataset_FT-January-07-2025_02+42PM-3c890633/config.json',#(model_path / 'config.json').as_posix(),
         ).to('cuda')
     logger.debug("TTS model loaded successfully")
 
@@ -251,12 +265,16 @@ def eval_tts(
         speaker_wav = dataset_path / 'wavs' / (speaker['audio_id'] + '.wav')
 
         logger.debug(f"Generating TTS for prompt {id_}, speaker {speaker_name}, iteration {gen_i}")
-        wave = model.tts(
+        wave, gpt_codes = model.tts(
             text=prompt['prompt'],
             speaker_wav=speaker_wav.as_posix(),
             language="en",
         )
-        wave = np.array(wave, dtype=np.float32)
+        try:
+            wave = np.array(wave, dtype=np.float32)
+        except ValueError:
+            wave = sum(wave, start=[])
+            wave = np.array(wave, dtype=np.float32)
 
         logger.debug("Transcribing generated audio")
         transcription = pipe(wave)

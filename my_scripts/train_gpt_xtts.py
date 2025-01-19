@@ -1,7 +1,13 @@
 import os
+from copy import deepcopy
+from itertools import product, count
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import torch
+from tqdm import tqdm
+
 import wandb
 from trainer import Trainer, TrainerArgs
 
@@ -11,7 +17,9 @@ from TTS.tts.layers.xtts.trainer.gpt_trainer import GPTArgs, GPTTrainer, GPTTrai
 from TTS.utils.manage import ModelManager
 
 from my_logger import WandbLogger
-from recipes.vctk.vits.train_vits import output_path
+from dpo_training.evaluate_tts import compute_text_metrics, compute_audio_metric, pipe
+
+project_root = r'/workspace/Projects/diploma'
 
 
 def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argument
@@ -21,40 +29,129 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
     meta_df = pd.read_csv(meta_file_path)
     items = []
     for _, row in meta_df.iterrows():
-        text = row['raw_text']
+        text = row['whisper_transcription']
         if not isinstance(text, str):
             continue
 
         if len(text.strip()) == 0:
             continue
 
-        wav_file = os.path.join(root_path, "wavs", row['audio_id'] + '.wav')
-        speaker_name = str(row['speaker_id']) + '_voxpopuli'
+        audio_id = row['audio_id']
+        if not audio_id.endswith('.wav'):
+            audio_id = audio_id + '.wav'
+
+        wav_file = os.path.join(root_path, "wavs", audio_id)
+        speaker_name = str(row['speaker_id'])
         items.append({"text": text, "audio_file": wav_file, "speaker_name": speaker_name, "root_path": root_path})
     return items
 
 
+epoch_counter = count()
+best_cer = float('inf')
+best_secs = float('-inf')
+best_utmos = float('-inf')
+
+base_checkpoints_path = Path(project_root) / 'runs' / 'triple-fn-checkpoints'
+
+def evaluate_model(trainer):
+    if next(epoch_counter) % 4 == 0:
+        global best_cer
+        global best_secs
+        global best_utmos
+
+        prompts = pd.read_csv("../data/my_tests/prompts.csv", index_col=0)
+        model = trainer.model.xtts
+        model.gpt.init_gpt_for_inference(kv_cache=model.args.kv_cache, use_deepspeed=False)
+        model.gpt.eval()
+        training = model.gpt.training
+
+        metrics = []
+        for gen_i, (id_, prompt) in tqdm(product(range(10), enumerate(prompts['prompt'])), total=len(prompts) * 10):
+            output = model.synthesize(
+                prompt,
+                model.config,
+                speaker_wav="../data/dpo_dataset/wavs/LJ001-0001.wav",
+                language='en',
+            )
+
+            wave = output['wav']
+            wave = np.array(wave, dtype=np.float32)
+
+            transcription = pipe(wave)
+            transcription = transcription['text']
+
+            text_metrics = compute_text_metrics(prompt, transcription)
+            secs_metric, utmos_metric = compute_audio_metric((wave, 22050), "LJ001-0001.wav", lg_config_dataset.path)
+
+            row = {
+                'prompt_id': id_,
+                'gen': gen_i,
+            }
+            row |= text_metrics
+            row |= {
+                'secs': secs_metric,
+                'utmos': utmos_metric,
+            }
+
+            metrics.append(row)
+
+        metrics = pd.DataFrame(metrics)
+        metrics = metrics.groupby('prompt_id')[['cer', 'mer', 'wer', 'wil', 'wip', 'secs', 'utmos']].mean()
+        metrics = metrics.mean()
+        trainer.dashboard_logger.add_scalars('eval', metrics.to_dict(), trainer.total_steps_done)
+        del model.gpt.gpt_inference
+        del model.gpt.gpt.wte
+
+        if metrics['cer'] < best_cer:
+            best_cer = metrics['cer']
+            cer_state_dict = deepcopy(model.cpu().state_dict())
+            checkpoint_path = base_checkpoints_path / 'cer'
+            checkpoint_path.mkdir(parents=True, exist_ok=True)
+            (checkpoint_path / 'model.pth').unlink(missing_ok=True)
+
+            torch.save(cer_state_dict, str(checkpoint_path / 'model.pth'))
+
+        if metrics['secs'] > best_secs:
+            best_secs = metrics['secs']
+            secs_state_dict = deepcopy(model.cpu().state_dict())
+            checkpoint_path = base_checkpoints_path / 'secs'
+            checkpoint_path.mkdir(parents=True, exist_ok=True)
+            (checkpoint_path / 'model.pth').unlink(missing_ok=True)
+
+            torch.save(secs_state_dict, str(checkpoint_path / 'model.pth'))
+
+        if metrics['utmos'] > best_utmos:
+            best_utmos = metrics['utmos']
+            utmos_state_dict = deepcopy(model.cpu().state_dict())
+            checkpoint_path = base_checkpoints_path / 'utmos'
+            checkpoint_path.mkdir(parents=True, exist_ok=True)
+            (checkpoint_path / 'model.pth').unlink(missing_ok=True)
+
+            torch.save(utmos_state_dict, str(checkpoint_path / 'model.pth'))
+
+        model.cuda()
+        model.gpt.train(training)
+
+
 # Logging parameters
-RUN_NAME = "GPT_XTTS_v2.0_Voxpopuli_FT"
+RUN_NAME = "LG_ASR _FT"
 PROJECT_NAME = "xTTS-training"
 DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
 
-
-project_root = r'D:\Учеба\КПИ\Diploma\TTS'
 
 # Set here the path that the checkpoints will be saved. Default: ./run/training/
 OUT_PATH = os.path.join(project_root, "runs/training")
 
 # Training Parameters
 OPTIMIZER_WD_ONLY_ON_WEIGHTS = True  # for multi-gpu training please make it False
-START_WITH_EVAL = True  # if True it will star with evaluation
+START_WITH_EVAL = False  # if True it will star with evaluation
 BATCH_SIZE = 4  # set here the batch size
 GRAD_ACUMM_STEPS = 252 // BATCH_SIZE + 1  # set here the grad accumulation steps
 # Note: we recommend that BATCH_SIZE * GRAD_ACUMM_STEPS need to be at least 252 for more efficient training. You can increase/decrease BATCH_SIZE but then set GRAD_ACUMM_STEPS accordingly.
 
 # Define here the dataset that you want to use for the fine-tuning on.
-config_dataset = BaseDatasetConfig(
+voxpopuli_config_dataset = BaseDatasetConfig(
     formatter="my_formatter",
     dataset_name="facebook-voxpopuli",
     path=os.path.join(project_root, "data/facebook_voxpopuli"),  # Updated to use the Hugging Face dataset
@@ -62,9 +159,29 @@ config_dataset = BaseDatasetConfig(
     meta_file_val='test_metadata.csv',
     language="en",
 )
+lg_config_dataset = BaseDatasetConfig(
+    formatter="my_formatter",
+    dataset_name="keithito_lj_speech",
+    path=os.path.join(project_root, "data/keithito_lj_speech"),  # Updated to use the Hugging Face dataset
+    meta_file_train=r"train_metadata.csv",
+    meta_file_val='test_metadata.csv',
+    language="en",
+)
+vctk_config_dataset = BaseDatasetConfig(
+    formatter="my_formatter",
+    dataset_name="VCTK-Corpus",
+    path=os.path.join(project_root, "data/VCTK-Corpus"),  # Updated to use the Hugging Face dataset
+    meta_file_train=r"train_metadata.csv",
+    meta_file_val='test_metadata.csv',
+    language="en",
+)
 
 # Add here the configs of the datasets
-DATASETS_CONFIG_LIST = [config_dataset]
+DATASETS_CONFIG_LIST = [
+    # voxpopuli_config_dataset,
+    lg_config_dataset,
+    # vctk_config_dataset,
+]
 
 # Define the path where XTTS v2.0.1 files will be downloaded
 CHECKPOINTS_OUT_PATH = os.path.join(OUT_PATH, "XTTS_v2.0_original_model_files/")
@@ -101,7 +218,7 @@ if not os.path.isfile(TOKENIZER_FILE) or not os.path.isfile(XTTS_CHECKPOINT):
 # Training sentences generations
 SPEAKER_REFERENCE = [os.path.join(project_root, "data/speakers/LJ001-0001.wav")]
 # SPEAKER_REFERENCE = list(Path('../data/speakers/').glob('*.wav'))
-LANGUAGE = config_dataset.language
+LANGUAGE = lg_config_dataset.language
 
 
 def main():
@@ -142,7 +259,7 @@ def main():
         num_loader_workers=8,
         eval_split_max_size=1000,
         eval_split_size=0.1,
-        print_step=50,
+        print_step=100,
         plot_step=100,
         log_model_step=1000,
         save_step=10000,
@@ -170,7 +287,7 @@ def main():
                 "language": LANGUAGE,
             },
         ],
-        # wandb_entity='kpi-msai',
+        wandb_entity='kpi-msai',
     )
 
     # init the model from config
@@ -208,6 +325,7 @@ def main():
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
+        # callbacks={'on_epoch_end': evaluate_model}
     )
     trainer.fit()
 

@@ -3,6 +3,7 @@ from typing import Dict, List, Tuple, Union
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchaudio
 from coqpit import Coqpit
 from torch.utils.data import DataLoader
@@ -229,10 +230,10 @@ class DPOTrainer(BaseTTS):
             reduction='none',
         )
 
-        mel_loss_w = -mel_loss_w
-        mel_loss_l = -mel_loss_l
-        ref_mel_loss_w = -ref_mel_loss_w
-        ref_mel_loss_l = -ref_mel_loss_l
+        mel_loss_w = -mel_loss_w.sum(-1)
+        mel_loss_l = -mel_loss_l.sum(-1)
+        ref_mel_loss_w = -ref_mel_loss_w.sum(-1)
+        ref_mel_loss_l = -ref_mel_loss_l.sum(-1)
 
         m_loss_w = mel_loss_w - ref_mel_loss_w
         m_loss_l = mel_loss_l - ref_mel_loss_l
@@ -353,7 +354,7 @@ class DPOTrainer(BaseTTS):
             text_inputs, text_lengths, wav_lengths, cond_mels, cond_idxs, cond_lens, mel_cond_w, mel_cond_l
         )
 
-        m_loss = -torch.log(torch.sigmoid(self.args.beta*(output['m_loss_w'] - output['m_loss_l']))).mean()
+        m_loss = -F.logsigmoid(self.args.beta*(output['m_loss_w'] - output['m_loss_l'])).mean()
         t_loss = -output['text_loss_w'].mean()  #-torch.log(torch.sigmoid(self.args.beta*(output['t_loss_w'] - output['t_loss_l']))).mean()
 
         m_loss = m_loss * self.args.gpt_loss_mel_ce_weight
