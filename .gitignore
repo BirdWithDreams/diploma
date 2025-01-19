@@ -174,5 +174,6 @@ coqui_demos/*
 *.json
 *.parquet
 *.csv
+*.tar.gz
 
 runs
