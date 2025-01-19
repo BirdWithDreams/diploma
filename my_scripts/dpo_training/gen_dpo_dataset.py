@@ -20,7 +20,6 @@ default_model_path = project_dir / 'checkpoints' / 'finale_models' / 'vctk-asr'
 default_output_path = project_dir / 'data' / 'dpo_dataset' / 'vctk-asr'
 
 
-
 @click.command()
 @click.option('--model-path', default=default_model_path, help='Path to dataset')
 @click.option('--dataset-path', default=default_prompt_path, help='Path to dataset')
@@ -28,7 +27,8 @@ default_output_path = project_dir / 'data' / 'dpo_dataset' / 'vctk-asr'
 @click.option('--output-folder', default=default_output_path, help='Name of output folder')
 @click.option('--prompts-bounds', default='na,na', help='Name of output folder')
 @click.option('--batch-size', default=100, help='The size of batch to save')
-def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_bounds, batch_size):
+@click.option('--gpu', default=0, help='The numver of GPU to use')
+def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_bounds, batch_size, gpu):
     model_path = Path(model_path).resolve()
     dataset_path = Path(dataset_path).resolve()
     metadata = pd.read_csv(dataset_path / 'metadata.csv')
@@ -50,7 +50,7 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
         # model_name='xtts_v2',
         model_path=model_path.as_posix(),
         config_path=(model_path / 'config.json').as_posix(),
-    ).to('cuda')
+    ).to(f'cuda:{gpu}')
 
     output_path = Path(output_folder)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -58,7 +58,6 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
 
     dpo_samples = []
     wavs = []
-
 
     for i, ((id_, row), gen_i) in tqdm.tqdm(
             enumerate(product(
@@ -114,12 +113,13 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
 
                 prompts = [row['text'] for row in dpo_samples]
 
-                text_metrics = [compute_text_metrics(prompt, transcription) for prompt, transcription in zip(prompts, transcriptions)]
+                text_metrics = [compute_text_metrics(prompt, transcription) for prompt, transcription in
+                                zip(prompts, transcriptions)]
                 text_metrics = pd.DataFrame(text_metrics)
 
                 dpo_samples = pd.DataFrame(dpo_samples)
                 dpo_samples = pd.concat([dpo_samples, text_metrics], axis=1)
-                dpo_samples.to_parquet(output_path / f'batch_{low+i}.parquet', engine='pyarrow')
+                dpo_samples.to_parquet(output_path / f'batch_{low + i}.parquet', engine='pyarrow')
 
 
             except Exception as e:
@@ -129,7 +129,7 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
                 wavs = []
 
     dpo_samples = pd.DataFrame(dpo_samples)
-    dpo_samples.to_parquet(output_path / f'batch_{low+i}.parquet', engine='pyarrow')
+    dpo_samples.to_parquet(output_path / f'batch_{low + i}.parquet', engine='pyarrow')
 
 
 if __name__ == '__main__':

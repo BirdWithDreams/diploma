@@ -1,16 +1,19 @@
 import subprocess
+from itertools import count
 from threading import Thread
 from queue import Queue
 import os
 
 import click
 import pandas as pd
+from wandb.sdk.internal.system.assets import gpu
 
 
 def gen_bound_pairs(size, num_threads):
     batch_size = size // num_threads + 1
     bounds = list(range(0, size, batch_size)) + [size]
     return list(zip(bounds[:-1], bounds[1:]))
+
 
 def worker(task_queue):
     """Worker function to process tasks from the queue"""
@@ -19,7 +22,7 @@ def worker(task_queue):
         if task is None:
             break
 
-        model_path, dataset_path, output_folder, bounds, batch_size = task
+        model_path, dataset_path, output_folder, bounds, batch_size, gpu = task
         print(' '.join([
             'python', 'gen_dpo_dataset.py',
             '--model-path', model_path,
@@ -35,8 +38,10 @@ def worker(task_queue):
             '--output-folder', output_folder,
             '--prompts-bounds', bounds,
             '--batch-size', batch_size,
+            '--gpu', str(gpu),
         ])
         task_queue.task_done()
+
 
 @click.command()
 @click.option('--num-threads', default=2, help='The number of threads i.e. number of parallely running models.')
@@ -55,15 +60,16 @@ def run_parallel_evaluation(num_threads, batch_size):
     task_queue = Queue()
 
     dataset_size = [
-        [len(pd.read_csv(d+'/metadata.csv')) for d in data] for data in datasets
+        [len(pd.read_csv(d + '/metadata.csv')) for d in data] for data in datasets
     ]
 
     bounds = [
-         [gen_bound_pairs(d_s, num_threads) for d_s in data_size] for data_size in dataset_size
+        [gen_bound_pairs(d_s, num_threads) for d_s in data_size] for data_size in dataset_size
     ]
 
     suffixes = ['', '-gen']
     num_tasks = 0
+    gpu_counter = count()
     # Create all tasks and put them in the queue
     for model_name, dataset, dataset_bounds in zip(models, datasets, bounds):
         for data, _bounds, suffix in zip(dataset, dataset_bounds, suffixes):
@@ -74,6 +80,7 @@ def run_parallel_evaluation(num_threads, batch_size):
                     f'../../data/dpo_dataset/{model_name}{suffix}',
                     f'{bound[0]},{bound[1]}',
                     f'{batch_size}',
+                    next(gpu_counter) % 8,
                 )
                 task_queue.put(task)
                 num_tasks += 1
