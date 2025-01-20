@@ -1,3 +1,4 @@
+import os
 import traceback
 from itertools import product, chain, repeat
 from pathlib import Path
@@ -29,6 +30,7 @@ default_output_path = project_dir / 'data' / 'dpo_dataset' / 'vctk-asr'
 @click.option('--batch-size', default=100, help='The size of batch to save')
 @click.option('--gpu', default=0, help='The numver of GPU to use')
 def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_bounds, batch_size, gpu):
+    os.environ['CUDA_VISIBLE_DEVICES'] = f'{gpu}'
     model_path = Path(model_path).resolve()
     dataset_path = Path(dataset_path).resolve()
     metadata = pd.read_csv(dataset_path / 'metadata.csv')
@@ -50,7 +52,7 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
         # model_name='xtts_v2',
         model_path=model_path.as_posix(),
         config_path=(model_path / 'config.json').as_posix(),
-    ).to(f'cuda:{gpu}')
+    ).to(f'cuda')
 
     output_path = Path(output_folder)
     output_path.mkdir(parents=True, exist_ok=True)
