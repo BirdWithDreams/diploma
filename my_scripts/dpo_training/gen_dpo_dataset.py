@@ -9,8 +9,6 @@ import pandas as pd
 import tqdm
 from loguru import logger
 
-from TTS.api import TTS
-from evaluate_tts import compute_text_metrics, compute_audio_metric, pipe
 
 logger.add("../../logs/generate_dpo_data.log", rotation="10 MB", level="INFO")
 
@@ -31,6 +29,9 @@ default_output_path = project_dir / 'data' / 'dpo_dataset' / 'vctk-asr'
 @click.option('--gpu', default=0, help='The numver of GPU to use')
 def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_bounds, batch_size, gpu):
     os.environ['CUDA_VISIBLE_DEVICES'] = f'{gpu}'
+    from TTS.api import TTS
+    from evaluate_tts import compute_text_metrics, compute_audio_metric, pipe
+
     model_path = Path(model_path).resolve()
     dataset_path = Path(dataset_path).resolve()
     metadata = pd.read_csv(dataset_path / 'metadata.csv')
