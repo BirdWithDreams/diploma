@@ -60,7 +60,6 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
     # (output_path / 'wavs').mkdir(parents=True, exist_ok=True)
 
     dpo_samples = []
-    wavs = []
 
     for i, ((id_, row), gen_i) in tqdm.tqdm(
             enumerate(product(
@@ -78,7 +77,10 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
                 audio_id = row['audio_id'] + '.wav'
 
             speaker = dataset_path / 'wavs' / audio_id
-            prompt = row['whisper_transcription']
+            try:
+                prompt = row['whisper_transcription']
+            except KeyError:
+                prompt = row['text']
 
             wav, gpt_codes = model.tts(
                 text=prompt,
@@ -87,9 +89,11 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
             )
 
             wav = np.array(wav, dtype=np.float32)
-            wavs.append(wav)
 
             secs_metric, utmos_metric = compute_audio_metric((wav, 22050), speaker.name, dataset_path)
+            transcription = pipe(wav, generate_kwargs={"language": "english"})['text']
+
+            text_metrics = compute_text_metrics(transcription, prompt)
 
             gpt_codes = np.hstack(gpt_codes)
 
@@ -103,7 +107,7 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
                     'gpt_codes': np.array(gpt_codes).flatten(),
                     'secs': secs_metric,
                     'utmos': utmos_metric,
-                }
+                } | text_metrics
             )
         except Exception as e:
             logger.error(f'Exception {str(e)} was occurred while processing {speaker.name} with {prompt} prompt')
@@ -111,25 +115,13 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
 
         if (i + 1) % batch_size == 0:
             try:
-                transcriptions = pipe(wavs, batch_size=50, generate_kwargs={"language": "english"})
-                transcriptions = [transcription['text'] for transcription in transcriptions]
-
-                prompts = [row['text'] for row in dpo_samples]
-
-                text_metrics = [compute_text_metrics(prompt, transcription) for prompt, transcription in
-                                zip(prompts, transcriptions)]
-                text_metrics = pd.DataFrame(text_metrics)
-
                 dpo_samples = pd.DataFrame(dpo_samples)
-                dpo_samples = pd.concat([dpo_samples, text_metrics], axis=1)
                 dpo_samples.to_parquet(output_path / f'batch_{low + i}.parquet', engine='pyarrow')
 
-
             except Exception as e:
-                print(f"Error {str(e)} occure while processing {i}-th batch")
+                print(f"Error {str(e)} occurred while processing {i}-th batch")
             finally:
                 dpo_samples = []
-                wavs = []
 
     dpo_samples = pd.DataFrame(dpo_samples)
     dpo_samples.to_parquet(output_path / f'batch_{low + i}.parquet', engine='pyarrow')
