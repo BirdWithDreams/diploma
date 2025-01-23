@@ -256,3 +256,39 @@
 #
 # metadata = pd.DataFrame(metadata)
 # metadata.to_csv(out_path.parent / 'metadata.csv', index=False)
+
+
+from pathlib import Path
+import pandas as pd
+
+
+def filter_df(df):
+    prompt_count = df.groupby(['speaker_id', 'prompt_id']).count()['gen_id']
+    prompt_count = prompt_count[prompt_count >= 10]
+    prompt_count = prompt_count.reset_index()['prompt_id'].unique()
+    return df[df['prompt_id'].isin(prompt_count)]
+
+path = Path(r'../data/dpo_dataset/lg-asr-gen')
+lg_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+
+path = Path(r'../data/dpo_dataset/lg-asr')
+lg_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+
+
+path = Path(r'../data/dpo_dataset/vctk-asr')
+vctk_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+
+path = Path(r'../data/dpo_dataset/vctk-asr-gen')
+vctk_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+
+lg_asr = filter_df(lg_asr)
+vctk_asr = filter_df(vctk_asr)
+
+lg_asr_gen = filter_df(lg_asr_gen)
+vctk_asr_gen = filter_df(vctk_asr_gen)
+
+lg_asr_gen.to_parquet('../data/dpo_dataset/lg_asr_gen.parquet', index=False)
+lg_asr.to_parquet('../data/dpo_dataset/lg_asr.parquet', index=False)
+
+vctk_asr_gen.to_parquet('../data/dpo_dataset/vctk_asr_gen.parquet', index=False)
+vctk_asr.to_parquet('../data/dpo_dataset/vctk_asr.parquet', index=False)

@@ -1,12 +1,10 @@
 import subprocess
 from itertools import count
-from threading import Thread
 from queue import Queue
-import os
+from threading import Thread
 
 import click
 import pandas as pd
-from wandb.sdk.internal.system.assets import gpu
 
 
 def gen_bound_pairs(size, num_threads):
@@ -23,23 +21,17 @@ def worker(task_queue):
             break
 
         model_path, dataset_path, output_folder, bounds, batch_size, gpu = task
-        print(' '.join([
+        command = [
             'python', 'gen_dpo_dataset.py',
             '--model-path', model_path,
             '--dataset-path', dataset_path,
             '--output-folder', output_folder,
             '--prompts-bounds', bounds,
             '--batch-size', batch_size,
-        ]))
-        subprocess.run([
-            'python', 'gen_dpo_dataset.py',
-            '--model-path', model_path,
-            '--dataset-path', dataset_path,
-            '--output-folder', output_folder,
-            '--prompts-bounds', bounds,
-            '--batch-size', batch_size,
-            '--gpu', str(gpu),
-        ])
+            '--extra',
+        ]
+        print(' '.join(command))
+        subprocess.run(command)
         task_queue.task_done()
 
 

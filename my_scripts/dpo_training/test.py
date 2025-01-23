@@ -139,3 +139,105 @@ df.to_parquet('../../data/dpo_dataset/finale_samples.parquet')
 #
 # metadata = pd.DataFrame(metadata)
 # metadata.to_parquet(output_path / 'last.parquet', engine='pyarrow')
+
+
+# import os
+# from itertools import count
+#
+# import click
+# import pandas as pd
+# import multiprocessing
+# from typing import Tuple, List
+#
+# from gen_dpo_dataset import generate_tts
+#
+#
+# def gen_bound_pairs(size: int, num_threads: int) -> List[Tuple[int, int]]:
+#     """
+#     Generate bound pairs for parallel processing.
+#
+#     Args:
+#         size (int): Total size of the dataset
+#         num_threads (int): Number of parallel threads/processes
+#
+#     Returns:
+#         List of (start, end) tuples for dividing work
+#     """
+#     batch_size = size // num_threads + 1
+#     bounds = list(range(0, size, batch_size)) + [size]
+#     return list(zip(bounds[:-1], bounds[1:]))
+#
+#
+# def run_parallel_generation(
+#         num_processes: int,
+#         batch_size: int
+# ) -> None:
+#     """
+#     Run parallel generation across multiple datasets and models.
+#
+#     Args:
+#         num_processes (int): Number of parallel processes
+#         batch_size (int): Batch size for processing
+#     """
+#     # Define datasets and models
+#     datasets = [
+#         ['../../data/VCTK-Corpus', '../../data/VCTK-Corpus_gen'],
+#         ['../../data/keithito_lj_speech', '../../data/keithito_lj_speech_gen'],
+#     ]
+#     models = [
+#         'vctk-asr',
+#         'lg-asr',
+#     ]
+#
+#     # Compute dataset sizes
+#     dataset_size = [
+#         [len(pd.read_csv(d + '/metadata.csv')) for d in data]
+#         for data in datasets
+#     ]
+#
+#     # Generate bounds for parallel processing
+#     bounds = [
+#         [gen_bound_pairs(d_s, num_processes) for d_s in data_size]
+#         for data_size in dataset_size
+#     ]
+#
+#     # Prepare arguments for multiprocessing
+#     process_args = []
+#     suffixes = ['', '-gen']
+#     gpu_counter = count()
+#     for model_name, dataset, dataset_bounds in zip(models, datasets, bounds):
+#         for data, _bounds, suffix in zip(dataset, dataset_bounds, suffixes):
+#             for bound in _bounds:
+#                 process_args.append((
+#                     f'../../checkpoints/finale_models/{model_name}',
+#                     data,
+#                     10,
+#                     f'../../data/dpo_dataset/{model_name}{suffix}',
+#                     f'{bound[0]},{bound[1]}',
+#                     batch_size,
+#                     0, #next(gpu_counter) % 8,
+#                     True,
+#                 ))
+#
+#     # Use multiprocessing Pool for parallel execution
+#     with multiprocessing.Pool(processes=num_processes) as pool:
+#         # Map generate_tts function to all prepared arguments
+#         pool.starmap(generate_tts, process_args)
+#
+#
+# @click.command()
+# @click.option('--num-processes', default=2, help='Number of parallel processes')
+# @click.option('--batch-size', default=100, help='Size of parquet file to save')
+# def main(num_processes: int, batch_size: int):
+#     """
+#     Main entry point for parallel TTS dataset generation.
+#
+#     Args:
+#         num_processes (int): Number of parallel processes
+#         batch_size (int): Batch size for processing
+#     """
+#     run_parallel_generation(num_processes, batch_size)
+#
+#
+# if __name__ == "__main__":
+#     main()

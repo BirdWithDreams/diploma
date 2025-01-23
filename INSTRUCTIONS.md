@@ -37,3 +37,22 @@ tar -cvzf dpo_data.tar.gz ./vctk-asr ./vctk-asr-gen ./lg-asr ./lg-asr-gen
 
 `dpo_data.tar.gz` is the finale archive.
 
+
+# Extra generation
+
+Run `diploma/my_scripts/test.py`. After this in `diploma/data/dpo_dataset` must appear 4 parquet files. 
+If it so, delete folders:
+```bash
+rm lg-asr -r
+rm lg-asr-gen -r
+rm vctk-asr -r
+rm vctk-asr-gen -r
+```
+
+Then run once more
+```bash
+cd ../../my_scripts/dpo_training
+python dpo_entry_point.py --num-threads 24
+```
+
+
