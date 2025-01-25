@@ -105,8 +105,8 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
     if extra:
         try:
             name = output_path.stem
-            context = pd.read_parquet(output_path.parent / f'{name.replace("-", "_")}.parquet')['prompt_id']
-            context = context.unique()
+            context = pd.read_parquet(output_path.parent / f'{name.replace("-", "_")}.parquet')[['audio_id', 'prompt_id']]
+            context = list(context.drop_duplicates().itertuples(index=False, name=None))
             logger.info(f"Loaded {len(context)} existing prompt IDs in extra mode")
         except Exception as e:
             logger.warning(f"Error in extra mode processing: {e}")
@@ -125,15 +125,15 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
             total=len(metadata) * sample_size
     ):
         try:
-            # Skip already processed entries in extra mode
-            if extra and context is not None and id_ in context:
-                logger.debug(f"Skipping already processed prompt ID: {id_}")
-                continue
-
             # Extract speaker and audio details
             speaker_name = row['speaker_id']
             audio_id = row['audio_id'] if row['audio_id'].endswith('.wav') else row['audio_id'] + '.wav'
             speaker = dataset_path / 'wavs' / audio_id
+
+            # Skip already processed entries in extra mode
+            if extra and context is not None and (speaker.name, id_) in context:
+                logger.debug(f"Skipping already processed prompt ID: {id_}")
+                continue
 
             # Get prompt text
             try:

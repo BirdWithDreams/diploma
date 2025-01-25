@@ -28,6 +28,7 @@ def worker(task_queue):
             '--output-folder', output_folder,
             '--prompts-bounds', bounds,
             '--batch-size', batch_size,
+            '--gpu', str(gpu),
             '--extra',
         ]
         print(' '.join(command))
