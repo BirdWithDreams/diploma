@@ -29,7 +29,7 @@ def worker(task_queue):
             '--prompts-bounds', bounds,
             '--batch-size', batch_size,
             '--gpu', str(gpu),
-            '--extra',
+            #'--extra',
         ]
         print(' '.join(command))
         subprocess.run(command)
