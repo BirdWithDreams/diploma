@@ -85,10 +85,11 @@ def generate_tts(model_path, dataset_path, sample_size, output_folder, prompts_b
     # Load TTS model
     try:
         logger.info("Loading TTS model")
-        model = TTS(
-            model_path=model_path.as_posix(),
-            config_path=(model_path / 'config.json').as_posix(),
-        ).to(f'cuda')
+        # model = TTS(
+        #     model_path=model_path.as_posix(),
+        #     config_path=(model_path / 'config.json').as_posix(),
+        # ).to(f'cuda')
+        model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to('cuda')
         logger.info("TTS model loaded successfully")
     except Exception as e:
         logger.error(f"Failed to load TTS model: {e}")

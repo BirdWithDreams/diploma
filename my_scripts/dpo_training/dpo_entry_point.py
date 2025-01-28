@@ -38,7 +38,7 @@ def worker(task_queue):
 
 @click.command()
 @click.option('--num-threads', default=2, help='The number of threads i.e. number of parallely running models.')
-@click.option('--batch-size', default=100, help='The size of parquet file to save.')
+@click.option('--batch-size', default=50, help='The size of parquet file to save.')
 def run_parallel_evaluation(num_threads, batch_size):
     datasets = [
         ['../../data/VCTK-Corpus', '../../data/VCTK-Corpus_gen'],
