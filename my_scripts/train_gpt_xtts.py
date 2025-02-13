@@ -29,7 +29,7 @@ def my_formatter(root_path, meta_file, **kwargs):  # pylint: disable=unused-argu
     meta_df = pd.read_csv(meta_file_path)
     items = []
     for _, row in meta_df.iterrows():
-        text = row['whisper_transcription']
+        text = row['text']
         if not isinstance(text, str):
             continue
 
@@ -134,7 +134,7 @@ def evaluate_model(trainer):
 
 
 # Logging parameters
-RUN_NAME = "LG_ASR _FT"
+RUN_NAME = "LG_FT"
 PROJECT_NAME = "xTTS-training"
 DASHBOARD_LOGGER = "wandb"
 LOGGER_URI = None
@@ -243,6 +243,7 @@ def main():
     audio_config = XttsAudioConfig(sample_rate=22050, dvae_sample_rate=22050, output_sample_rate=24000)
     # training parameters config
     config = GPTTrainerConfig(
+        epochs=150,
         output_path=OUT_PATH,
         model_args=model_args,
         run_name=RUN_NAME,

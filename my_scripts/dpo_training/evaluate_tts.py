@@ -60,7 +60,7 @@ logger.debug("UTMOS model loaded successfully")
 
 model_name = "openai/whisper-medium"
 logger.info(f"Setting up ASR pipeline with model: {model_name}")
-model_name = "openai/whisper-medium"
+
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 

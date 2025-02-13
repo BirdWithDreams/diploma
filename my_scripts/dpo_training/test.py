@@ -1,10 +1,12 @@
+from functools import partial
+
 import pandas as pd
 from pathlib import Path
 
 
-def group_scoring(group):
+def group_scoring(group, ascending=True):
     # Sort values and reset index to get positions 1 to n
-    sorted_group = group.sort_values()
+    sorted_group = group.sort_values(ascending=ascending)
     n = len(sorted_group)
 
     # Create scores from 1 to n (or 1 to 10 if you specifically need 10)
@@ -12,7 +14,7 @@ def group_scoring(group):
         data=range(1, n + 1),
         index=sorted_group.index
     )
-    return scores
+    return scores/n
 
 
 # Read the data
@@ -20,8 +22,8 @@ df = pd.read_parquet('../../data/dpo_dataset/finale_samples.parquet')
 
 # Apply ranking for each metric
 df['cer_rank'] = df.groupby(['speaker_id', 'prompt_id'])['cer'].transform(group_scoring)
-df['secs_rank'] = df.groupby(['speaker_id', 'prompt_id'])['secs'].transform(group_scoring)
-df['utmos_rank'] = df.groupby(['speaker_id', 'prompt_id'])['utmos'].transform(group_scoring)
+df['secs_rank'] = df.groupby(['speaker_id', 'prompt_id'])['secs'].transform(partial(group_scoring, ascending=False))
+df['utmos_rank'] = df.groupby(['speaker_id', 'prompt_id'])['utmos'].transform(partial(group_scoring, ascending=False))
 
 df.to_parquet('../../data/dpo_dataset/finale_samples.parquet')
 

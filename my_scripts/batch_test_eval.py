@@ -1,7 +1,6 @@
 import subprocess
 from threading import Thread
 from queue import Queue
-import os
 
 
 def worker(task_queue):
@@ -11,21 +10,41 @@ def worker(task_queue):
         if task is None:
             break
 
-        dir, model, dataset = task
+        dir, model, dataset, test_file = task
         subprocess.run([
-            'python', 'evaluate_tts.py',
+            'python', 'evaluate_on_test.py',
             '--model-name', f'{model}',
+            '--test-file', test_file,
             '--dataset-path', dataset,
             '--model-path', f'../checkpoints/{dir}/{model}',
-            '--output-name', f'{model}-metrics'
+            '--output-name', f'{model}-test-metrics'
         ])
         task_queue.task_done()
 
 
 def run_parallel_evaluation():
     models = [
-        'base-vctk-dpo-best',
-        'base-vctk-dpo-last',
+        # 'base-vctk-dpo-best',
+        # 'base-vctk-dpo-last',
+        # 'base-vctk-dpo-augmented-best',
+        # 'base-vctk-dpo-augmented-last',
+        'asr-vctk-dpo-augmented-best',
+        'asr-vctk-dpo-augmented-last',
+        # 'vctk-dpo-best',
+        # 'vctk-dpo-last',
+        # 'vctk-asr',
+
+        'vctk_best',
+        'vctk_last',
+
+        # 'lg-asr',
+        # 'lg-human-last',
+        # 'lg-human-best',
+        # 'lg-dpo-last',
+        # 'lg-dpo-best',
+        #
+        # 'base_xtts_v2',
+
     ]
     datasets = [
         # '../data/facebook_voxpopuli',
@@ -39,7 +58,10 @@ def run_parallel_evaluation():
     # Create all tasks and put them in the queue
     for dataset in datasets:
         for model in models:
-            task_queue.put(('finale_models', model, dataset))
+            if 'dpo' in model:
+                task_queue.put(('finale_models', model, dataset, 'dpo_data_test.parquet'))
+            else:
+                task_queue.put(('.', model, dataset, 'dpo_data_test.parquet'))
 
     # Create 2 worker threads
     num_threads = 2

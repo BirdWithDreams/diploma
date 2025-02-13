@@ -44,38 +44,39 @@
 # from TTS.utils.io import load_fsspec
 #
 #
-# # def get_compatible_checkpoint_state_dict(model_path):
-# #     checkpoint = load_fsspec(model_path, map_location=torch.device("cpu"))
-# #     # remove xtts gpt trainer extra keys
-# #     ignore_keys = ["torch_mel_spectrogram_style_encoder", "torch_mel_spectrogram_dvae", "dvae"]
-# #     for key in list(checkpoint.keys()):
-# #         # check if it is from the coqui Trainer if so convert it
-# #         if key.startswith("xtts."):
-# #             new_key = key.replace("xtts.", "")
-# #             checkpoint[new_key] = checkpoint[key]
-# #             del checkpoint[key]
-# #             key = new_key
-# #
-# #         # remove unused keys
-# #         if key.split(".")[0] in ignore_keys:
-# #             del checkpoint[key]
-# #
-# #     return checkpoint
-# #
-# #
-# # # model = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+# def get_compatible_checkpoint_state_dict(model_path):
+#     checkpoint = load_fsspec(model_path, map_location=torch.device("cpu"))
+#     # remove xtts gpt trainer extra keys
+#     ignore_keys = ["torch_mel_spectrogram_style_encoder", "torch_mel_spectrogram_dvae", "dvae"]
+#     for key in list(checkpoint.keys()):
+#         # check if it is from the coqui Trainer if so convert it
+#         if key.startswith("xtts."):
+#             new_key = key.replace("xtts.", "")
+#             checkpoint[new_key] = checkpoint[key]
+#             del checkpoint[key]
+#             key = new_key
+#
+#         # remove unused keys
+#         if key.split(".")[0] in ignore_keys:
+#             del checkpoint[key]
+#
+#     return checkpoint
+#
+#
+# # model = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
 # # model = TTS(
 # #     model_path='/workspace/Projects/diploma/runs/dpo-checkpoints/test/',
 # #     config_path='/workspace/Projects/diploma/runs/training/GPT_XTTS_Triple_Dataset_FT-January-07-2025_02+42PM-3c890633/config.json'
 # # )
-# #
-# # state_dict_1 = torch.load('/workspace/Projects/diploma/runs/dpo-checkpoints/cer/model.pth')
-# # state_dict_1 = {'model':state_dict_1}
-# # torch.save(state_dict_1, '/workspace/Projects/diploma/runs/dpo-checkpoints/test/model.pth')
-# #
-# # state_dict_2 = torch.load('/workspace/Projects/diploma/runs/training/GPT_XTTS_Triple_Dataset_FT-January-07-2025_02+42PM-3c890633/best_model.pth', map_location=torch.device('cpu'))
-# #
-# # pass
+#
+# state_dict_1 = torch.load('/workspace/Projects/diploma/checkpoints/finale_models/vctk-asr/model.pth')
+# state_dict_1 = {'model':state_dict_1}
+# # torch.save(state_dict_1, '/workspace/Projects/diploma/checkpoints/finale_models/lg-asr/model.pth')
+#
+# state_dict_2 = torch.load('/workspace/Projects/diploma/checkpoints/finale_models/lg-asr/model.pth', map_location=torch.device('cpu'))
+# state_dict_2 = {'model':state_dict_2}
+#
+# pass
 #
 # # from itertools import product
 # #
@@ -134,25 +135,25 @@
 # df.to_csv(path_vctk / 'metadata.csv', index=False)
 
 
-# from pathlib import Path
-# import torch
-#
-# fn_path = Path('/workspace/Projects/diploma/runs/training')
-#
-# models = [
-#     'VCTK_ARR _FT-January-14-2025_03+28PM-0000000/checkpoint_1500000.pth',
-#     'LG_ASR _FT-January-16-2025_06+58PM-3c890633/checkpoint_471600.pth',
-# ]
-#
-# out_path = Path('/workspace/Projects/diploma/checkpoints')
-#
-# for name, model in zip(['vctk-asr', 'lg-asr'], models):
-#     path = fn_path / model
-#     state_dict = torch.load(path)
-#     state_dict = {'model': state_dict['model']}
-#     out = out_path / name / 'model.pth'
-#     out.parent.mkdir(parents=True, exist_ok=True)
-#     torch.save(state_dict, str(out))
+from pathlib import Path
+import torch
+
+fn_path = Path('/workspace/Projects/diploma/runs/training')
+
+models = [
+    'DPO_VCTK_ASR_Augmented_Training-February-08-2025_07+09PM-4268688b/best_model.pth',
+    'DPO_VCTK_ASR_Augmented_Training-February-08-2025_07+09PM-4268688b/checkpoint_461754.pth',
+]
+
+out_path = Path('/workspace/Projects/diploma/checkpoints/finale_models')
+
+for name, model in zip(['asr-vctk-dpo-augmented-best', 'asr-vctk-dpo-augmented-last'], models):
+    path = fn_path / model
+    state_dict = torch.load(path, map_location='cpu')
+    state_dict = {'model': {k:v for k, v in state_dict['model'].items() if not k.startswith('ref_xtts')}}
+    out = out_path / name / 'model.pth'
+    out.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(state_dict, str(out))
 
 
 # import pandas as pd
@@ -258,37 +259,37 @@
 # metadata.to_csv(out_path.parent / 'metadata.csv', index=False)
 
 
-from pathlib import Path
-import pandas as pd
-
-
-def filter_df(df):
-    prompt_count = df.groupby(['speaker_id', 'prompt_id']).count()['gen_id']
-    prompt_count = prompt_count[prompt_count >= 10]
-    prompt_count = prompt_count.reset_index()['prompt_id'].unique()
-    return df[df['prompt_id'].isin(prompt_count)]
-
-path = Path(r'../data/dpo_dataset/lg-asr-gen')
-lg_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
-
-path = Path(r'../data/dpo_dataset/lg-asr')
-lg_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
-
-
-path = Path(r'../data/dpo_dataset/vctk-asr')
-vctk_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
-
-path = Path(r'../data/dpo_dataset/vctk-asr-gen')
-vctk_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
-
-lg_asr = filter_df(lg_asr)
-vctk_asr = filter_df(vctk_asr)
-
-lg_asr_gen = filter_df(lg_asr_gen)
-vctk_asr_gen = filter_df(vctk_asr_gen)
-
-lg_asr_gen.to_parquet('../data/dpo_dataset/lg_asr_gen.parquet', index=False)
-lg_asr.to_parquet('../data/dpo_dataset/lg_asr.parquet', index=False)
-
-vctk_asr_gen.to_parquet('../data/dpo_dataset/vctk_asr_gen.parquet', index=False)
-vctk_asr.to_parquet('../data/dpo_dataset/vctk_asr.parquet', index=False)
+# from pathlib import Path
+# import pandas as pd
+#
+#
+# def filter_df(df):
+#     prompt_count = df.groupby(['speaker_id', 'prompt_id']).count()['gen_id']
+#     prompt_count = prompt_count[prompt_count >= 10]
+#     prompt_count = prompt_count.reset_index()['prompt_id'].unique()
+#     return df[df['prompt_id'].isin(prompt_count)]
+#
+# path = Path(r'../data/dpo_dataset/lg-asr-gen')
+# lg_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+#
+# path = Path(r'../data/dpo_dataset/lg-asr')
+# lg_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+#
+#
+# path = Path(r'../data/dpo_dataset/vctk-asr')
+# vctk_asr = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+#
+# path = Path(r'../data/dpo_dataset/vctk-asr-gen')
+# vctk_asr_gen = pd.concat([pd.read_parquet(file) for file in list(path.glob('*'))], axis=0)
+#
+# lg_asr = filter_df(lg_asr)
+# vctk_asr = filter_df(vctk_asr)
+#
+# lg_asr_gen = filter_df(lg_asr_gen)
+# vctk_asr_gen = filter_df(vctk_asr_gen)
+#
+# lg_asr_gen.to_parquet('../data/dpo_dataset/lg_asr_gen.parquet', index=False)
+# lg_asr.to_parquet('../data/dpo_dataset/lg_asr.parquet', index=False)
+#
+# vctk_asr_gen.to_parquet('../data/dpo_dataset/vctk_asr_gen.parquet', index=False)
+# vctk_asr.to_parquet('../data/dpo_dataset/vctk_asr.parquet', index=False)
