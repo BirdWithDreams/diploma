@@ -28,28 +28,31 @@ def run_parallel_evaluation():
         # 'base-vctk-dpo-last',
         # 'base-vctk-dpo-augmented-best',
         # 'base-vctk-dpo-augmented-last',
-        'asr-vctk-dpo-augmented-best',
-        'asr-vctk-dpo-augmented-last',
+        # 'asr-vctk-dpo-augmented-best',
+        # 'asr-vctk-dpo-augmented-last',
         # 'vctk-dpo-best',
         # 'vctk-dpo-last',
         # 'vctk-asr',
 
-        'vctk_best',
-        'vctk_last',
+        # 'vctk_best',
+        # 'vctk_last',
 
         # 'lg-asr',
         # 'lg-human-last',
         # 'lg-human-best',
-        # 'lg-dpo-last',
-        # 'lg-dpo-best',
+        # 'asr-lg-dpo-last',
+        # 'asr-lg-dpo-best',
+        'asr-lg-dpo-augmented-last',
+        'base-lg-dpo-augmented-last',
+        'base-lg-dpo-last',
         #
         # 'base_xtts_v2',
 
     ]
     datasets = [
         # '../data/facebook_voxpopuli',
-        # '../data/keithito_lj_speech',
-        '../data/VCTK-Corpus',
+        '../data/keithito_lj_speech',
+        # '../data/VCTK-Corpus',
     ]
 
     # Create a queue to hold all tasks
@@ -59,7 +62,7 @@ def run_parallel_evaluation():
     for dataset in datasets:
         for model in models:
             if 'dpo' in model:
-                task_queue.put(('finale_models', model, dataset, 'dpo_data_test.parquet'))
+                task_queue.put(('finale_models', model, dataset, 'test_metadata.csv'))
             else:
                 task_queue.put(('.', model, dataset, 'dpo_data_test.parquet'))
 

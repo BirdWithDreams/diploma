@@ -331,7 +331,7 @@ class TTS(nn.Module):
         """
         self._check_arguments(speaker=speaker, language=language, speaker_wav=speaker_wav, **kwargs)
 
-        wav = self.tts(
+        wav, _ = self.tts(
             text=text,
             speaker=speaker,
             language=language,

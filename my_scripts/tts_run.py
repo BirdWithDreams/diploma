@@ -24,7 +24,7 @@ tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
 
 tts.tts_to_file(
             text="It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
-            speaker_wav=r"/home/azhuravlov/Projects/diploma/data/speakers/LJ001-0001.wav",
+            speaker_wav=r"/workspace/Projects/diploma/data/speakers/LJ001-0001.wav",
             language="en",
             file_path=f"../data/my_tests/lj_sample.wav"
         )

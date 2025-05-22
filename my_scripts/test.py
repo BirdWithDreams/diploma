@@ -135,25 +135,25 @@
 # df.to_csv(path_vctk / 'metadata.csv', index=False)
 
 
-from pathlib import Path
-import torch
-
-fn_path = Path('/workspace/Projects/diploma/runs/training')
-
-models = [
-    'DPO_VCTK_ASR_Augmented_Training-February-08-2025_07+09PM-4268688b/best_model.pth',
-    'DPO_VCTK_ASR_Augmented_Training-February-08-2025_07+09PM-4268688b/checkpoint_461754.pth',
-]
-
-out_path = Path('/workspace/Projects/diploma/checkpoints/finale_models')
-
-for name, model in zip(['asr-vctk-dpo-augmented-best', 'asr-vctk-dpo-augmented-last'], models):
-    path = fn_path / model
-    state_dict = torch.load(path, map_location='cpu')
-    state_dict = {'model': {k:v for k, v in state_dict['model'].items() if not k.startswith('ref_xtts')}}
-    out = out_path / name / 'model.pth'
-    out.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(state_dict, str(out))
+# from pathlib import Path
+# import torch
+#
+# fn_path = Path('/workspace/Projects/diploma/runs/training')
+#
+# models = [
+#     'checkpoint_210000.pth',
+#     # 'DPO_VCTK_ASR_Augmented_Training-February-08-2025_07+09PM-4268688b/checkpoint_461754.pth',
+# ]
+#
+# out_path = Path('/workspace/Projects/diploma/checkpoints/finale_models')
+#
+# for name, model in zip(['asr-lg-dpo-augmented-last'], models):
+#     path = fn_path / model
+#     state_dict = torch.load(path, map_location='cpu')
+#     state_dict = {'model': {k:v for k, v in state_dict['model'].items() if not k.startswith('ref_xtts')}}
+#     out = out_path / name / 'model.pth'
+#     out.parent.mkdir(parents=True, exist_ok=True)
+#     torch.save(state_dict, str(out))
 
 
 # import pandas as pd
@@ -293,3 +293,96 @@ for name, model in zip(['asr-vctk-dpo-augmented-best', 'asr-vctk-dpo-augmented-l
 #
 # vctk_asr_gen.to_parquet('../data/dpo_dataset/vctk_asr_gen.parquet', index=False)
 # vctk_asr.to_parquet('../data/dpo_dataset/vctk_asr.parquet', index=False)
+
+
+import subprocess
+from threading import Thread
+from queue import Queue
+
+
+def worker(task_queue):
+    """Worker function to process tasks from the queue"""
+    while True:
+        task = task_queue.get()
+        if task is None:
+            break
+
+        model_name, model_path, speakers, dataset, test_file = task
+        command = [
+            'python', 'generate_samples.py',
+            '--model-name', f'{model_name}',
+            '--test-file', test_file,
+            '--speakers', f'{speakers}',
+            '--dataset-path', dataset,
+            '--model-path', f'../checkpoints/finale_models/{model_path}',
+        ]
+        print(' '.join(command))
+        subprocess.run(command)
+        task_queue.task_done()
+        subprocess.run(command)
+        task_queue.task_done()
+
+
+def run_parallel_evaluation():
+    models = {
+        # 'V3': 'base-vctk-dpo-last',
+        # 'V4': 'base-vctk-dpo-augmented-last',
+        # 'V6': 'asr-vctk-dpo-augmented-last',
+        # 'V5': 'vctk-dpo-last',
+        # 'V2': 'vctk-asr',
+        #
+        # 'V1': 'vctk_last',
+
+        # 'L2': 'lg-asr',
+        # 'L1': 'lg-human-last',
+        # 'L5': 'asr-lg-dpo-last',
+        'L6': 'asr-lg-dpo-augmented-last',
+        'L4': 'base-lg-dpo-augmented-last',
+        'L3': 'base-lg-dpo-last',
+
+
+        # 'base_xtts_v2': 'base_xtts_v2',
+    }
+
+    datasets = [
+        # '../data/facebook_voxpopuli',
+        '../data/keithito_lj_speech',
+        '../data/VCTK-Corpus',
+    ]
+
+    # Create a queue to hold all tasks
+    task_queue = Queue()
+
+    # Create all tasks and put them in the queue
+    for model_name, model_path in models.items():
+        if 'L' in model_name:
+            task_queue.put((model_name, model_path, 'lg_speaker,lg_speaker', '../data/keithito_lj_speech', 'test_metadata.csv'))
+        elif 'V' in model_name:
+            task_queue.put((model_name, model_path, 'p225,p311,p251,p262', '../data/VCTK-Corpus', 'test_metadata.csv'))
+        elif model_name == 'base_xtts_v2':
+            task_queue.put((model_name, model_path, 'lg_speaker,lg_speaker', '../data/keithito_lj_speech', 'test_metadata.csv'))
+            task_queue.put((model_name, model_path, 'p225,p311,p251,p262', '../data/VCTK-Corpus', 'test_metadata.csv'))
+
+
+    # Create 2 worker threads
+    num_threads = 2
+    threads = []
+    for _ in range(num_threads):
+        thread = Thread(target=worker, args=(task_queue,))
+        thread.start()
+        threads.append(thread)
+
+    # Wait for all tasks to complete
+    task_queue.join()
+
+    # Stop workers
+    for _ in range(num_threads):
+        task_queue.put(None)
+
+    # Wait for all threads to finish
+    for thread in threads:
+        thread.join()
+
+
+if __name__ == "__main__":
+    run_parallel_evaluation()
